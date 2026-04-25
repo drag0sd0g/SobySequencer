@@ -28,6 +28,8 @@ public class OutputHandler implements EventHandler<OrderEvent> {
           event.getQuantity(),
           event.getState());
     }
-    // No additional processing needed - event is already marked as PROCESSED
+    // Reset the event to default state before it can be reused
+    // This clears all fields to prevent stale data from persisting in the ring buffer
+    event.reset();
   }
 }

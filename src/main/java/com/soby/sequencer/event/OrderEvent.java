@@ -32,7 +32,7 @@ public class OrderEvent {
   private long price;
   private long quantity;
   private long timestampNanos;
-  private EventState state;
+  private EventState state = EventState.EMPTY;
 
   public void reset() {
     sequenceNumber = 0L;

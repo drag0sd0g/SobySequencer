@@ -168,4 +168,22 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
   public FileChannel getFileChannel() {
     return fileChannel;
   }
+
+  /**
+   * Get the latency recorder for testing.
+   *
+   * @return latency recorder
+   */
+  public LatencyRecorder getLatencyRecorder() {
+    return latencyRecorder;
+  }
+
+  /**
+   * Get the journal file for testing.
+   *
+   * @return journal file
+   */
+  public File getJournalFile() {
+    return journalFile;
+  }
 }

@@ -2,6 +2,7 @@ plugins {
     `java-library`
     application
     id("com.diffplug.spotless") version "6.25.0"
+    id("jacoco")
 }
 
 group = "com.soby.sequencer"
@@ -44,6 +45,30 @@ tasks.test {
     }
 }
 
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.jacocoTestReport)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                minimum = BigDecimal("0.70")
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn("jacocoTestCoverageVerification", "spotlessCheck")
+}
+
 tasks.jar {
     manifest {
         attributes(mapOf("Main-Class" to "com.soby.sequencer.Main"))
@@ -65,8 +90,4 @@ spotless {
 
 tasks.register("format") {
     dependsOn("spotlessApply")
-}
-
-tasks.check {
-    dependsOn("spotlessCheck")
 }
