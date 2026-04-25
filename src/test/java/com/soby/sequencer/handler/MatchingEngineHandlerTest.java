@@ -1,9 +1,8 @@
-package com.soby.sequencer;
+package com.soby.sequencer.handler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.soby.sequencer.event.OrderEvent;
-import com.soby.sequencer.handler.MatchingEngineHandler;
 import com.soby.sequencer.model.OrderType;
 import com.soby.sequencer.model.Side;
 import com.soby.sequencer.util.LatencyRecorder;

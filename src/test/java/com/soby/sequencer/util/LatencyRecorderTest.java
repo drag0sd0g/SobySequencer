@@ -1,8 +1,7 @@
-package com.soby.sequencer;
+package com.soby.sequencer.util;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.soby.sequencer.util.LatencyRecorder;
 import org.junit.jupiter.api.Test;
 
 /** Unit tests for LatencyRecorder. Tests histogram recording and percentile calculations. */

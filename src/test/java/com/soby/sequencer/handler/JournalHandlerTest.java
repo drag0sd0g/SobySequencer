@@ -1,9 +1,8 @@
-package com.soby.sequencer;
+package com.soby.sequencer.handler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.soby.sequencer.event.OrderEvent;
-import com.soby.sequencer.handler.JournalHandler;
 import com.soby.sequencer.util.LatencyRecorder;
 import java.io.File;
 import java.io.IOException;

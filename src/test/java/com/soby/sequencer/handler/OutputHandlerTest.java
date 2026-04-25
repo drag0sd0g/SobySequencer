@@ -1,10 +1,9 @@
-package com.soby.sequencer;
+package com.soby.sequencer.handler;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import com.soby.sequencer.event.OrderEvent;
 import com.soby.sequencer.event.OrderEvent.EventState;
-import com.soby.sequencer.handler.OutputHandler;
 import com.soby.sequencer.model.OrderType;
 import com.soby.sequencer.model.Side;
 import org.junit.jupiter.api.BeforeEach;

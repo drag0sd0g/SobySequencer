@@ -1,8 +1,9 @@
-package com.soby.sequencer;
+package com.soby.sequencer.producer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import com.soby.sequencer.producer.OrderProducer;
+import com.soby.sequencer.Sequencer;
+import com.soby.sequencer.SequencerConfig;
 import org.junit.jupiter.api.*;
 
 public class OrderProducerTest {
