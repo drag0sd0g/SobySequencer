@@ -422,7 +422,7 @@ Result: Lower latency, less jitter.
 ### NUMA Considerations
 
 On multi-socket servers:
-- Each socket has its own memory控制器
+- Each socket has its own memory
 - Accessing remote socket memory is 2x slower
 - Affinity should consider NUMA topology
 
