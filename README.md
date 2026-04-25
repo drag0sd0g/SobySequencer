@@ -2,12 +2,6 @@
 
 A production-quality Java low-latency event sequencer built on the LMAX Disruptor.
 
-```
-   ()__()
-   (='.'=)    <--- Soby
-   (")_(")
-```
-
 ## Requirements
 
 - Java 21+
