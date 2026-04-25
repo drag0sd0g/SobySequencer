@@ -110,12 +110,12 @@ public class Sequencer {
             OrderEvent event = ringBuffer.get(sequence);
             // Populate the event slot
             event.setSequenceNumber(sequence);
-            event.setOrderId(order.getOrderId());
-            event.setSymbol(order.getSymbol());
-            event.setSide(order.getSide());
-            event.setType(order.getType());
-            event.setPrice(order.getPrice());
-            event.setQuantity(order.getQuantity());
+            event.setOrderId(order.orderId());
+            event.setSymbol(order.symbol());
+            event.setSide(order.side());
+            event.setType(order.type());
+            event.setPrice(order.price());
+            event.setQuantity(order.quantity());
             event.setTimestampNanos(System.nanoTime());
             event.setState(OrderEvent.EventState.PUBLISHED);
         } finally {

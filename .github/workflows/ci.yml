@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       
@@ -17,15 +20,14 @@ jobs:
           distribution: 'temurin'
       
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon
       
       - name: Test
-        run: ./gradlew test
+        run: ./gradlew test --no-daemon
       
-      - name: Publish Test Results
-        uses: dorny/test-reporter@v1
+      - name: Upload Test Results
         if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: JUnit Results
-          path: build/test-results/**/*.xml
-          reporter: java-junit
+          name: test-results
+          path: build/test-results/
