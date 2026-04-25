@@ -1,179 +1,183 @@
 package com.soby.sequencer;
 
-import com.soby.sequencer.event.OrderEvent;
-import com.soby.sequencer.event.OrderEventFactory;
-import com.soby.sequencer.model.Order;
-import com.soby.sequencer.producer.OrderProducer;
-import com.soby.sequencer.handler.MatchingEngineHandler;
-import com.soby.sequencer.handler.JournalHandler;
-import com.soby.sequencer.util.LatencyRecorder;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.soby.sequencer.handler.JournalHandler;
+import com.soby.sequencer.handler.MatchingEngineHandler;
+import com.soby.sequencer.model.Order;
+import com.soby.sequencer.producer.OrderProducer;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-/**
- * Integration tests for Sequencer.
- * Tests the full pipeline with the Disruptor.
- */
+/** Integration tests for Sequencer. Tests the full pipeline with the Disruptor. */
 public class SequencerIntegrationTest {
 
-    private Sequencer sequencer;
-    private String tempJournalPath;
-    private final AtomicInteger processedCount = new AtomicInteger(0);
-    private MatchingEngineHandler testHandler;
+  private Sequencer sequencer;
+  private String tempJournalPath;
+  private final AtomicInteger processedCount = new AtomicInteger(0);
+  private MatchingEngineHandler testHandler;
 
-    @BeforeEach
-    public void setUp() throws IOException {
-        // Create a temporary journal file
-        Path tempFile = Files.createTempFile("sequencer-test", ".dat");
-        tempJournalPath = tempFile.toString();
+  @BeforeEach
+  public void setUp() throws IOException {
+    // Create a temporary journal file
+    Path tempFile = Files.createTempFile("sequencer-test", ".dat");
+    tempJournalPath = tempFile.toString();
 
-        // Build config with small ring buffer and blocking wait for test stability
-        SequencerConfig config = new SequencerConfig.Builder()
-                .ringBufferSize(256)
-                .waitStrategy(SequencerConfig.WaitStrategyType.BLOCKING)
-                .enableAffinity(false)
-                .journalFilePath(tempJournalPath)
-                .build();
+    // Build config with small ring buffer and blocking wait for test stability
+    SequencerConfig config =
+        new SequencerConfig.Builder()
+            .ringBufferSize(256)
+            .waitStrategy(SequencerConfig.WaitStrategyType.BLOCKING)
+            .enableAffinity(false)
+            .journalFilePath(tempJournalPath)
+            .build();
 
-        sequencer = new Sequencer(config);
+    sequencer = new Sequencer(config);
 
-        // Get the matching engine handler and add a wrapper to count events
-        testHandler = sequencer.getMatchingEngineHandler();
+    // Get the matching engine handler and add a wrapper to count events
+    testHandler = sequencer.getMatchingEngineHandler();
 
-        // We'll count events by overriding the handler's onEvent
-        // For this test, we'll check the count after processing
+    // We'll count events by overriding the handler's onEvent
+    // For this test, we'll check the count after processing
+  }
+
+  @AfterEach
+  public void tearDown() {
+    if (sequencer != null) {
+      sequencer.shutdown();
+    }
+    // Clean up temp file
+    if (tempJournalPath != null) {
+      try {
+        Files.deleteIfExists(Paths.get(tempJournalPath));
+      } catch (IOException e) {
+        // Ignore cleanup errors
+      }
+    }
+  }
+
+  @Test
+  public void testProcessesOrdersAndRecordsLatencies() throws Exception {
+    // Start the sequencer
+    sequencer.start();
+
+    // Create producer
+    OrderProducer producer = new OrderProducer(sequencer, 10000);
+
+    // Publish 10,000 orders
+    for (long i = 0; i < 10000; i++) {
+      producer.publishOrder(i);
     }
 
-    @AfterEach
-    public void tearDown() {
-        if (sequencer != null) {
-            sequencer.shutdown();
-        }
-        // Clean up temp file
-        if (tempJournalPath != null) {
-            try {
-                Files.deleteIfExists(Paths.get(tempJournalPath));
-            } catch (IOException e) {
-                // Ignore cleanup errors
-            }
-        }
+    // Wait for all events to be processed
+    Thread.sleep(1000);
+
+    // Verify all orders were processed
+    long cursor = sequencer.getCursor();
+    assertEquals(9999, cursor, "Cursor should be at 9999 (0-indexed, 10000 orders)");
+
+    // Verify journal file was created
+    File journalFile = new File(tempJournalPath);
+    assertTrue(journalFile.exists(), "Journal file should exist");
+    assertTrue(journalFile.length() > 0, "Journal file should have content");
+
+    // Verify latency recorders captured values
+    assertNotNull(sequencer.getJournalLatencyRecorder());
+    assertNotNull(sequencer.getMatchingLatencyRecorder());
+
+    // Shutdown
+    sequencer.shutdown();
+  }
+
+  @Test
+  public void testJournalEntriesAreContiguous() throws Exception {
+    // Start the sequencer
+    sequencer.start();
+
+    // Publish 100 orders
+    for (long i = 0; i < 100; i++) {
+      sequencer.publishOrder(
+          new Order(
+              i,
+              "TEST",
+              com.soby.sequencer.model.Side.BUY,
+              com.soby.sequencer.model.OrderType.LIMIT,
+              100L,
+              10L));
     }
 
-    @Test
-    public void testProcessesOrdersAndRecordsLatencies() throws Exception {
-        // Start the sequencer
-        sequencer.start();
+    // Wait for processing
+    Thread.sleep(500);
 
-        // Create producer
-        OrderProducer producer = new OrderProducer(sequencer, 10000);
+    // Verify journal position matches published count
+    JournalHandler journalHandler = sequencer.getJournalHandler();
+    assertNotNull(journalHandler, "Journal handler should exist");
 
-        // Publish 10,000 orders
-        for (long i = 0; i < 10000; i++) {
-            producer.publishOrder(i);
-        }
+    // The journal handler records latencies, but we need to check if entries were written
+    // We can verify by checking sequence numbers in events
 
-        // Wait for all events to be processed
-        Thread.sleep(1000);
+    sequencer.shutdown();
+  }
 
-        // Verify all orders were processed
-        long cursor = sequencer.getCursor();
-        assertEquals(9999, cursor, "Cursor should be at 9999 (0-indexed, 10000 orders)");
+  @Test
+  public void testPublishingRateDoesNotDropEvents() throws Exception {
+    // Use blocking wait strategy to avoid backpressure issues
+    SequencerConfig config =
+        new SequencerConfig.Builder()
+            .ringBufferSize(256)
+            .waitStrategy(SequencerConfig.WaitStrategyType.BLOCKING)
+            .enableAffinity(false)
+            .journalFilePath(tempJournalPath)
+            .build();
 
-        // Verify journal file was created
-        File journalFile = new File(tempJournalPath);
-        assertTrue(journalFile.exists(), "Journal file should exist");
-        assertTrue(journalFile.length() > 0, "Journal file should have content");
+    Sequencer testSequencer = new Sequencer(config);
+    testSequencer.start();
 
-        // Verify latency recorders captured values
-        assertNotNull(sequencer.getJournalLatencyRecorder());
-        assertNotNull(sequencer.getMatchingLatencyRecorder());
+    // Publish in batches to avoid overwhelming the ring buffer
+    int totalOrders = 1000;
+    int batchSize = 100;
 
-        // Shutdown
-        sequencer.shutdown();
+    for (int batch = 0; batch < totalOrders / batchSize; batch++) {
+      for (int i = 0; i < batchSize; i++) {
+        long orderId = batch * batchSize + i;
+        testSequencer.publishOrder(
+            new Order(
+                orderId,
+                "TEST",
+                com.soby.sequencer.model.Side.BUY,
+                com.soby.sequencer.model.OrderType.LIMIT,
+                100L,
+                10L));
+      }
+      // Brief pause between batches
+      Thread.sleep(10);
     }
 
-    @Test
-    public void testJournalEntriesAreContiguous() throws Exception {
-        // Start the sequencer
-        sequencer.start();
+    // Wait for all events to be processed
+    Thread.sleep(1000);
 
-        // Publish 100 orders
-        for (long i = 0; i < 100; i++) {
-            sequencer.publishOrder(new Order(i, "TEST", com.soby.sequencer.model.Side.BUY, 
-                    com.soby.sequencer.model.OrderType.LIMIT, 100L, 10L));
-        }
+    // Verify all orders were processed (no drops)
+    long cursor = testSequencer.getCursor();
+    assertEquals(totalOrders - 1, cursor, "Should process all " + totalOrders + " orders");
 
-        // Wait for processing
-        Thread.sleep(500);
+    testSequencer.shutdown();
+  }
 
-        // Verify journal position matches published count
-        JournalHandler journalHandler = sequencer.getJournalHandler();
-        assertNotNull(journalHandler, "Journal handler should exist");
-        
-        // The journal handler records latencies, but we need to check if entries were written
-        // We can verify by checking sequence numbers in events
+  @Test
+  public void testSequencerStartAndShutdownCleanly() throws Exception {
+    // Start
+    sequencer.start();
+    assertNotNull(sequencer.getCursor(), "Cursor should be available after start");
 
-        sequencer.shutdown();
-    }
-
-    @Test
-    public void testPublishingRateDoesNotDropEvents() throws Exception {
-        // Use blocking wait strategy to avoid backpressure issues
-        SequencerConfig config = new SequencerConfig.Builder()
-                .ringBufferSize(256)
-                .waitStrategy(SequencerConfig.WaitStrategyType.BLOCKING)
-                .enableAffinity(false)
-                .journalFilePath(tempJournalPath)
-                .build();
-
-        Sequencer testSequencer = new Sequencer(config);
-        testSequencer.start();
-
-        // Publish in batches to avoid overwhelming the ring buffer
-        int totalOrders = 1000;
-        int batchSize = 100;
-
-        for (int batch = 0; batch < totalOrders / batchSize; batch++) {
-            for (int i = 0; i < batchSize; i++) {
-                long orderId = batch * batchSize + i;
-                testSequencer.publishOrder(new Order(orderId, "TEST", 
-                        com.soby.sequencer.model.Side.BUY, 
-                        com.soby.sequencer.model.OrderType.LIMIT, 
-                        100L, 10L));
-            }
-            // Brief pause between batches
-            Thread.sleep(10);
-        }
-
-        // Wait for all events to be processed
-        Thread.sleep(1000);
-
-        // Verify all orders were processed (no drops)
-        long cursor = testSequencer.getCursor();
-        assertEquals(totalOrders - 1, cursor, "Should process all " + totalOrders + " orders");
-
-        testSequencer.shutdown();
-    }
-
-    @Test
-    public void testSequencerStartAndShutdownCleanly() throws Exception {
-        // Start
-        sequencer.start();
-        assertNotNull(sequencer.getCursor(), "Cursor should be available after start");
-
-        // Shutdown
-        sequencer.shutdown();
-        // No exceptions means clean shutdown
-    }
+    // Shutdown
+    sequencer.shutdown();
+    // No exceptions means clean shutdown
+  }
 }

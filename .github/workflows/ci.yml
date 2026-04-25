@@ -25,6 +25,9 @@ jobs:
       - name: Test
         run: ./gradlew test --no-daemon
       
+      - name: Format Check
+        run: ./gradlew spotlessCheck --no-daemon
+      
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4

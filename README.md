@@ -2,13 +2,6 @@
 
 A production-quality Java low-latency event sequencer built on the LMAX Disruptor.
 
-And in case you were wondering, Soby is this guy:
-```
-   ()__()
-  (='.'=)
-  (")_(")
-```
-
 ## Requirements
 
 - Java 21+
@@ -32,6 +25,20 @@ And in case you were wondering, Soby is this guy:
 ./gradlew test
 ```
 
+## Code Formatting
+
+This project uses Google Java Style with Spotless. To format your code:
+
+```bash
+./gradlew spotlessApply
+```
+
+To check if code is properly formatted (used in CI):
+
+```bash
+./gradlew spotlessCheck
+```
+
 ## Configuration
 
 Configuration is done via `SequencerConfig` in `Main.java` or via system properties:
@@ -52,6 +59,36 @@ Configuration is done via `SequencerConfig` in `Main.java` or via system propert
 ## Architecture
 
 See `ARCHITECTURE.md` for detailed technical documentation.
+
+## Project Structure
+
+```
+SobySequencer/
+├── src/main/java/com/soby/sequencer/
+│   ├── Main.java                     # Entry point
+│   ├── Sequencer.java                # Core disruptor wrapper
+│   ├── SequencerConfig.java          # Configuration
+│   ├── event/                        # Ring buffer events
+│   │   ├── OrderEvent.java
+│   │   └── OrderEventFactory.java
+│   ├── handler/                      # Event handlers
+│   │   ├── JournalHandler.java
+│   │   ├── MatchingEngineHandler.java
+│   │   └── OutputHandler.java
+│   ├── producer/                     # Order producers
+│   │   └── OrderProducer.java
+│   ├── model/                        # Domain models
+│   │   ├── Order.java
+│   │   ├── OrderType.java
+│   │   └── Side.java
+│   └── util/                         # Utilities
+│       ├── AffinitySupport.java
+│       └── LatencyRecorder.java
+└── src/test/java/com/soby/sequencer/
+    ├── SequencerIntegrationTest.java
+    ├── MatchingEngineHandlerTest.java
+    └── LatencyRecorderTest.java
+```
 
 ## License
 

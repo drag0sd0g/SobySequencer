@@ -1,6 +1,7 @@
 plugins {
     `java-library`
     application
+    id("com.diffplug.spotless") version "6.25.0"
 }
 
 group = "com.soby.sequencer"
@@ -52,4 +53,20 @@ tasks.jar {
 tasks.withType<AbstractArchiveTask> {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
+}
+
+spotless {
+    java {
+        googleJavaFormat("1.19.2")
+        removeUnusedImports()
+        toggleOffOn()
+    }
+}
+
+tasks.register("format") {
+    dependsOn("spotlessApply")
+}
+
+tasks.check {
+    dependsOn("spotlessCheck")
 }

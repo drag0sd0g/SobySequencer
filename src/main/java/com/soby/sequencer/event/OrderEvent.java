@@ -4,117 +4,117 @@ import com.soby.sequencer.model.OrderType;
 import com.soby.sequencer.model.Side;
 
 /**
- * Pre-allocated, mutable event object that lives in the ring buffer.
- * All fields are reset via setters to avoid allocations during normal operation.
+ * Pre-allocated, mutable event object that lives in the ring buffer. All fields are reset via
+ * setters to avoid allocations during normal operation.
  */
 public class OrderEvent {
-    public static enum EventState {
-        EMPTY((byte) 0),
-        PUBLISHED((byte) 1),
-        PROCESSED((byte) 2);
+  public enum EventState {
+    EMPTY((byte) 0),
+    PUBLISHED((byte) 1),
+    PROCESSED((byte) 2);
 
-        private final byte value;
+    private final byte value;
 
-        EventState(byte value) {
-            this.value = value;
-        }
-
-        public byte getValue() {
-            return value;
-        }
+    EventState(byte value) {
+      this.value = value;
     }
 
-    private long sequenceNumber;
-    private long orderId;
-    private String symbol;
-    private Side side;
-    private OrderType type;
-    private long price;
-    private long quantity;
-    private long timestampNanos;
-    private EventState state;
-
-    public void reset() {
-        sequenceNumber = 0L;
-        orderId = 0L;
-        symbol = null;
-        side = null;
-        type = null;
-        price = 0L;
-        quantity = 0L;
-        timestampNanos = 0L;
-        state = EventState.EMPTY;
+    public byte getValue() {
+      return value;
     }
+  }
 
-    public long getSequenceNumber() {
-        return sequenceNumber;
-    }
+  private long sequenceNumber;
+  private long orderId;
+  private String symbol;
+  private Side side;
+  private OrderType type;
+  private long price;
+  private long quantity;
+  private long timestampNanos;
+  private EventState state;
 
-    public void setSequenceNumber(long sequenceNumber) {
-        this.sequenceNumber = sequenceNumber;
-    }
+  public void reset() {
+    sequenceNumber = 0L;
+    orderId = 0L;
+    symbol = null;
+    side = null;
+    type = null;
+    price = 0L;
+    quantity = 0L;
+    timestampNanos = 0L;
+    state = EventState.EMPTY;
+  }
 
-    public long getOrderId() {
-        return orderId;
-    }
+  public long getSequenceNumber() {
+    return sequenceNumber;
+  }
 
-    public void setOrderId(long orderId) {
-        this.orderId = orderId;
-    }
+  public void setSequenceNumber(long sequenceNumber) {
+    this.sequenceNumber = sequenceNumber;
+  }
 
-    public String getSymbol() {
-        return symbol;
-    }
+  public long getOrderId() {
+    return orderId;
+  }
 
-    public void setSymbol(String symbol) {
-        this.symbol = symbol;
-    }
+  public void setOrderId(long orderId) {
+    this.orderId = orderId;
+  }
 
-    public Side getSide() {
-        return side;
-    }
+  public String getSymbol() {
+    return symbol;
+  }
 
-    public void setSide(Side side) {
-        this.side = side;
-    }
+  public void setSymbol(String symbol) {
+    this.symbol = symbol;
+  }
 
-    public OrderType getType() {
-        return type;
-    }
+  public Side getSide() {
+    return side;
+  }
 
-    public void setType(OrderType type) {
-        this.type = type;
-    }
+  public void setSide(Side side) {
+    this.side = side;
+  }
 
-    public long getPrice() {
-        return price;
-    }
+  public OrderType getType() {
+    return type;
+  }
 
-    public void setPrice(long price) {
-        this.price = price;
-    }
+  public void setType(OrderType type) {
+    this.type = type;
+  }
 
-    public long getQuantity() {
-        return quantity;
-    }
+  public long getPrice() {
+    return price;
+  }
 
-    public void setQuantity(long quantity) {
-        this.quantity = quantity;
-    }
+  public void setPrice(long price) {
+    this.price = price;
+  }
 
-    public long getTimestampNanos() {
-        return timestampNanos;
-    }
+  public long getQuantity() {
+    return quantity;
+  }
 
-    public void setTimestampNanos(long timestampNanos) {
-        this.timestampNanos = timestampNanos;
-    }
+  public void setQuantity(long quantity) {
+    this.quantity = quantity;
+  }
 
-    public EventState getState() {
-        return state;
-    }
+  public long getTimestampNanos() {
+    return timestampNanos;
+  }
 
-    public void setState(EventState state) {
-        this.state = state;
-    }
+  public void setTimestampNanos(long timestampNanos) {
+    this.timestampNanos = timestampNanos;
+  }
+
+  public EventState getState() {
+    return state;
+  }
+
+  public void setState(EventState state) {
+    this.state = state;
+  }
 }
