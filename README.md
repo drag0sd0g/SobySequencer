@@ -2,6 +2,12 @@
 
 A production-quality Java low-latency event sequencer built on the LMAX Disruptor.
 
+```
+   ()__()
+   (='.'=)    <--- Soby
+   (")_(")
+```
+
 ## Requirements
 
 - Java 21+
@@ -141,36 +147,6 @@ Just provides a simplified, readable way to run common commands. The `justfile` 
 ## Architecture
 
 See `ARCHITECTURE.md` for detailed technical documentation.
-
-## Project Structure
-
-```
-SobySequencer/
-├── src/main/java/com/soby/sequencer/
-│   ├── Main.java                     # Entry point
-│   ├── Sequencer.java                # Core disruptor wrapper
-│   ├── SequencerConfig.java          # Configuration
-│   ├── event/                        # Ring buffer events
-│   │   ├── OrderEvent.java
-│   │   └── OrderEventFactory.java
-│   ├── handler/                      # Event handlers
-│   │   ├── JournalHandler.java
-│   │   ├── MatchingEngineHandler.java
-│   │   └── OutputHandler.java
-│   ├── producer/                     # Order producers
-│   │   └── OrderProducer.java
-│   ├── model/                        # Domain models
-│   │   ├── Order.java
-│   │   ├── OrderType.java
-│   │   └── Side.java
-│   └── util/                         # Utilities
-│       ├── AffinitySupport.java
-│       └── LatencyRecorder.java
-└── src/test/java/com/soby/sequencer/
-    ├── SequencerIntegrationTest.java
-    ├── MatchingEngineHandlerTest.java
-    └── LatencyRecorderTest.java
-```
 
 ## License
 
