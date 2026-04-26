@@ -1,7 +1,12 @@
 package com.soby.sequencer;
 
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.BusySpinWaitStrategy;
+import com.lmax.disruptor.EventHandler;
 import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.SleepingWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
+import com.lmax.disruptor.YieldingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.soby.sequencer.event.OrderEvent;
@@ -23,11 +28,10 @@ import java.util.concurrent.TimeUnit;
  * writer principle) for zero-contention writes.
  */
 public class Sequencer {
-  private Disruptor<OrderEvent> disruptor;
+  private final Disruptor<OrderEvent> disruptor;
   private final JournalHandler journalHandler;
   private final MatchingEngineHandler matchingEngineHandler;
-  private final OutputHandler outputHandler;
-  private ExecutorService executor;
+  private final ExecutorService executor;
   private final SequencerConfig config;
 
   // Latency recorders
@@ -52,7 +56,7 @@ public class Sequencer {
     // Create handlers
     this.journalHandler = new JournalHandler(config.getJournalFilePath(), journalLatencyRecorder);
     this.matchingEngineHandler = new MatchingEngineHandler(matchingLatencyRecorder);
-    this.outputHandler = new OutputHandler();
+    var outputHandler = new OutputHandler();
 
     // Create executor
     this.executor = Executors.newCachedThreadPool();
@@ -80,27 +84,19 @@ public class Sequencer {
    * @return the Disruptor WaitStrategy
    */
   private WaitStrategy getWaitStrategy(SequencerConfig.WaitStrategyType type) {
-    switch (type) {
-      case BUSY_SPIN:
-        return new com.lmax.disruptor.BusySpinWaitStrategy();
-      case YIELDING:
-        return new com.lmax.disruptor.YieldingWaitStrategy();
-      case SLEEPING:
-        return new com.lmax.disruptor.SleepingWaitStrategy();
-      case BLOCKING:
-        return new com.lmax.disruptor.BlockingWaitStrategy();
-      default:
-        return new com.lmax.disruptor.BusySpinWaitStrategy();
-    }
+    return switch (type) {
+      case BUSY_SPIN -> new BusySpinWaitStrategy();
+      case YIELDING -> new YieldingWaitStrategy();
+      case SLEEPING -> new SleepingWaitStrategy();
+      case BLOCKING -> new BlockingWaitStrategy();
+    };
   }
 
   /**
    * Start the sequencer and begin processing events. Optionally pins the main thread to a CPU core
    * for lowest latency.
-   *
-   * @throws IOException if journal cannot be initialized
    */
-  public void start() throws IOException {
+  public void start() {
     if (config.isEnableAffinity()) {
       AffinitySupport.pinCurrentThreadToCore(config.getSequencerCpuCore());
     }
@@ -117,7 +113,7 @@ public class Sequencer {
     RingBuffer<OrderEvent> ringBuffer = disruptor.getRingBuffer();
     long sequence = ringBuffer.next();
     try {
-      OrderEvent event = ringBuffer.get(sequence);
+      var event = ringBuffer.get(sequence);
       // Populate the event slot
       event.setSequenceNumber(sequence);
       event.setOrderId(order.orderId());
@@ -162,7 +158,7 @@ public class Sequencer {
    *
    * @return the journal handler
    */
-  public JournalHandler getJournalHandler() {
+  JournalHandler getJournalHandler() {
     return journalHandler;
   }
 
@@ -171,7 +167,7 @@ public class Sequencer {
    *
    * @return the matching engine handler
    */
-  public MatchingEngineHandler getMatchingEngineHandler() {
+  MatchingEngineHandler getMatchingEngineHandler() {
     return matchingEngineHandler;
   }
 
@@ -224,7 +220,7 @@ public class Sequencer {
    * Stub replica handler for parallel processing in the diamond dependency graph. In a production
    * system this would write to a secondary journal or send to a replica.
    */
-  private static class ReplicaHandler implements com.lmax.disruptor.EventHandler<OrderEvent> {
+  private static class ReplicaHandler implements EventHandler<OrderEvent> {
     @Override
     public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
       // This handler runs in parallel with JournalHandler

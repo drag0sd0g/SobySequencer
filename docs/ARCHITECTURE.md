@@ -6,63 +6,195 @@
 This section provides in-depth explanations of the core concepts and terminology used throughout this document and in the SobySequencer codebase. Understanding these terms is essential for grasping the architecture and performance characteristics of the system.
 
 ### Disruptor
-The Disruptor is a high-performance inter-thread messaging library developed by LMAX. It provides a lock-free, low-latency mechanism for passing data between threads, using a pre-allocated ring buffer and a set of coordinated consumers (handlers). The Disruptor pattern is designed to minimize contention, garbage collection, and context switching, making it ideal for high-throughput, low-latency systems such as trading engines.
+The Disruptor is a high-performance inter-thread messaging library and concurrency pattern developed by LMAX for ultra-low-latency systems. It replaces traditional queues with a lock-free, single-writer ring buffer and a set of coordinated consumers (handlers). The Disruptor pattern is designed to:
+- Eliminate locks and minimize contention between threads
+- Avoid garbage collection (GC) pauses by pre-allocating all data structures
+- Enable extremely high throughput and low, predictable latency
+
+**How it works:**
+Producers claim slots in a ring buffer, write data, and publish a sequence. Consumers (handlers) process events in the buffer, each tracking their own progress via sequence numbers. The Disruptor coordinates dependencies between consumers using sequence barriers.
+
+**Mermaid diagram:**
+```mermaid
+flowchart LR
+    Producer1((Producer)) -->|publish| RingBuffer
+    Producer2((Producer)) -->|publish| RingBuffer
+    RingBuffer((Ring Buffer)) -->|event| HandlerA((Handler A))
+    RingBuffer -->|event| HandlerB((Handler B))
+    HandlerA -->|dependency| HandlerC((Handler C))
+    HandlerB -->|dependency| HandlerC
+```
 
 ### Ring Buffer
-A ring buffer (also known as a circular buffer) is a fixed-size, pre-allocated array that wraps around when the end is reached. In the Disruptor, the ring buffer holds event objects (such as orders) that are passed from producers to consumers. The buffer size is always a power of two, enabling efficient index calculation using bitwise operations. Each slot in the buffer is reused, eliminating the need for frequent memory allocation and reducing garbage collection pressure.
+A ring buffer (circular buffer) is a fixed-size, pre-allocated array that wraps around when the end is reached. In the Disruptor, the ring buffer holds event objects (such as orders) that are passed from producers to consumers. The buffer size is always a power of two, enabling efficient index calculation using bitwise operations (bitmasking). Each slot is reused, eliminating the need for frequent memory allocation and reducing garbage collection pressure.
 
 **Key properties:**
-- Fixed size, power-of-two length
+- Fixed size, power-of-two length for fast modulo
 - Pre-allocated objects (no runtime allocation)
 - Circular addressing (wraps around)
 - Used for high-speed producer-consumer communication
 
+**Mermaid diagram:**
+```mermaid
+flowchart LR
+    subgraph RingBuffer [Ring Buffer]
+        A1((Slot 0)) --> A2((Slot 1)) --> A3((Slot 2)) --> A4((Slot 3))
+        A4 --> A1
+    end
+    Producer -.->|writes| A2
+    Consumer -.->|reads| A2
+```
+
 ### Sequence
 A sequence is a monotonically increasing number that represents the position of an event in the ring buffer. Each producer and consumer maintains its own sequence value. Sequences are used to coordinate access to the buffer, track progress, and implement back-pressure. In the Disruptor, the sequence is the primary means of synchronization, replacing locks.
+
+**Details:**
+- The producer increments its sequence as it publishes new events.
+- Each consumer tracks the last sequence it has processed.
+- Sequences are used to determine buffer availability and to coordinate dependencies between handlers.
+
+**Mermaid diagram:**
+```mermaid
+sequenceDiagram
+    participant Producer
+    participant RingBuffer
+    participant Consumer
+    Producer->>RingBuffer: Write event at sequence N
+    Producer->>RingBuffer: Publish sequence N
+    Consumer->>RingBuffer: Wait for sequence N
+    Consumer->>RingBuffer: Read event at sequence N
+```
 
 ### Sequence Barrier
 A sequence barrier is a coordination mechanism that allows a consumer to wait until a specific sequence (or set of sequences) has been published by producers or processed by other consumers. Sequence barriers are used to enforce dependencies between handlers (e.g., ensuring that the MatchingEngineHandler does not process an event until the JournalHandler and ReplicaHandler have finished with it).
 
+**How it works:**
+- Each handler can depend on one or more other handlers.
+- The sequence barrier tracks the minimum sequence of all dependencies.
+- The handler waits until all dependencies have processed up to a given sequence before proceeding.
+
+**Mermaid diagram:**
+```mermaid
+flowchart TD
+    JournalHandler -.->|sequence| MatchingEngineHandler
+    ReplicaHandler -.->|sequence| MatchingEngineHandler
+    MatchingEngineHandler -.->|sequence| OutputHandler
+```
+
 ### Wait Strategy
 A wait strategy defines how a thread waits for a condition to be met (such as a new event being available in the ring buffer). The Disruptor provides several wait strategies, each with different trade-offs between latency and CPU usage:
-- **BusySpinWaitStrategy**: The thread spins in a tight loop, checking the condition repeatedly. Lowest latency, highest CPU usage.
-- **YieldingWaitStrategy**: The thread yields control to the scheduler when waiting, reducing CPU usage but increasing latency slightly.
-- **SleepingWaitStrategy**: The thread sleeps for short intervals, minimizing CPU usage but increasing latency further.
-- **BlockingWaitStrategy**: The thread blocks on a lock or condition variable, using no CPU while waiting but incurring the highest latency due to context switches.
+
+- **BusySpinWaitStrategy**: The thread spins in a tight loop, checking the condition repeatedly. This provides the lowest latency but uses 100% CPU on the waiting thread. Best for dedicated CPU cores.
+- **YieldingWaitStrategy**: The thread yields control to the OS scheduler when waiting, reducing CPU usage but increasing latency slightly. Good for shared CPU environments.
+- **SleepingWaitStrategy**: The thread sleeps for short intervals (e.g., microseconds), minimizing CPU usage but increasing latency further. Suitable for low-throughput or power-constrained environments.
+- **BlockingWaitStrategy**: The thread blocks on a lock or condition variable, using no CPU while waiting but incurring the highest latency due to context switches. Used for tests or low-throughput production.
+
+**Choosing a wait strategy:**
+- Busy spin for lowest latency, dedicated hardware
+- Yielding for moderate latency, shared hardware
+- Sleeping/blocking for low throughput or power saving
 
 ### Memory Barrier
 A memory barrier (or fence) is a CPU instruction that enforces ordering constraints on memory operations. In concurrent programming, memory barriers ensure that writes performed by one thread are visible to other threads in the correct order. The Disruptor uses memory barriers (e.g., via `Unsafe.putOrderedLong` or `VarHandle.setRelease`) to guarantee that event data is fully written before the sequence number is published, preventing consumers from seeing stale or partially written data.
 
+**Types of memory barriers:**
+- Store-store barrier: Ensures all previous writes are visible before a subsequent write.
+- Load-load barrier: Ensures all previous reads are completed before subsequent reads.
+- Full fence: Ensures all previous reads and writes are completed before any subsequent reads or writes.
+
+**In the Disruptor:**
+When a producer publishes a sequence, a store-store barrier ensures that all event data is visible to consumers before the sequence number is updated.
+
 ### Single Writer Principle (SWP)
 The Single Writer Principle states that only one thread should write to a given memory location at any time. By adhering to this principle, the Disruptor eliminates the need for locks on the write path, reducing contention and improving throughput. In SobySequencer, the producer thread is the only writer to each slot in the ring buffer, while consumers only read from their assigned slots.
 
+**Benefits:**
+- No need for locks or atomic operations on the write path
+- Eliminates false sharing and cache line contention
+- Simplifies reasoning about concurrency
+
 ### Producer and Consumer
-- **Producer**: A thread or component that creates and publishes events into the ring buffer. In SobySequencer, the OrderProducer is responsible for publishing new orders.
-- **Consumer (Handler)**: A thread or component that processes events from the ring buffer. Handlers in SobySequencer include the JournalHandler, ReplicaHandler, MatchingEngineHandler, and OutputHandler.
+- **Producer**: A thread or component that creates and publishes events into the ring buffer. In SobySequencer, the OrderProducer is responsible for publishing new orders. There can be one or more producers, but each slot in the buffer is written by only one producer at a time.
+- **Consumer (Handler)**: A thread or component that processes events from the ring buffer. Handlers in SobySequencer include the JournalHandler, ReplicaHandler, MatchingEngineHandler, and OutputHandler. Each consumer tracks its own sequence and may depend on other consumers.
+
+**Mermaid diagram:**
+```mermaid
+flowchart LR
+    Producer1((Producer)) -->|publish| RingBuffer
+    RingBuffer -->|event| Consumer1((Consumer))
+    RingBuffer -->|event| Consumer2((Consumer))
+```
 
 ### Back-pressure
 Back-pressure is a mechanism that prevents producers from overwhelming consumers. In the Disruptor, back-pressure is implemented by blocking the producer when the ring buffer is full (i.e., when all slots are occupied by unprocessed events). The producer must wait until consumers have advanced their sequences and freed up slots.
 
+**How it works:**
+- The producer checks the minimum sequence of all consumers.
+- If the buffer is full (producer's next sequence would overwrite an unprocessed event), the producer waits.
+- This ensures that slow consumers do not cause data loss or buffer corruption.
+
 ### False Sharing
 False sharing occurs when multiple threads modify variables that reside on the same CPU cache line, causing unnecessary cache invalidations and performance degradation. The Disruptor mitigates false sharing by padding sequence variables so that each resides on its own cache line, ensuring that updates by one thread do not interfere with others.
+
+**Example:**
+If two threads update variables that are adjacent in memory and share a cache line, each update invalidates the other's cache, causing performance to degrade dramatically. Padding variables to cache line boundaries prevents this.
 
 ### Cache Line
 A cache line is the smallest unit of memory that can be transferred between main memory and the CPU cache. On modern CPUs, a cache line is typically 64 bytes. Proper alignment and padding of frequently updated variables (such as sequences) to cache line boundaries is critical for performance in concurrent systems.
 
+**Why it matters:**
+- If two variables share a cache line and are updated by different threads, false sharing can occur.
+- Aligning variables to cache line boundaries ensures each thread's data is isolated in the cache.
+
 ### MappedByteBuffer
 MappedByteBuffer is a Java NIO class that allows a file to be mapped directly into memory. This enables high-speed, zero-copy I/O operations, as reads and writes to the buffer are translated directly to file offsets by the operating system. In SobySequencer, the journal uses MappedByteBuffer to persist events to disk with minimal overhead.
+
+**Benefits:**
+- No need to copy data between user space and kernel space
+- OS handles paging and caching
+- Enables very fast sequential I/O
 
 ### Order Book
 An order book is a data structure that tracks buy and sell orders for a financial instrument, organized by price and time. The matching engine uses the order book to match incoming orders according to price-time priority, ensuring fair and efficient execution.
 
+**Mermaid diagram:**
+```mermaid
+flowchart LR
+    subgraph OrderBook
+        Bids((Bids))
+        Asks((Asks))
+    end
+    Bids -- matches --> Asks
+```
+
 ### Latency Percentiles (p50, p99, p99.9, etc.)
 Latency percentiles are statistical measures that describe the distribution of response times in a system. For example, p99.9 latency is the value below which 99.9% of all observed latencies fall. Tracking high percentiles is critical for understanding and optimizing the tail behavior of low-latency systems.
+
+**Why percentiles matter:**
+- Mean/average latency can hide outliers and tail latency
+- High percentiles (p99, p99.9) reveal worst-case performance
 
 ### HdrHistogram
 HdrHistogram is a high dynamic range histogram library designed for recording and analyzing latency data with high precision and a wide value range. It is used in SobySequencer to measure and report latency percentiles.
 
+**Features:**
+- Tracks values from microseconds to hours
+- Configurable precision
+- Efficient memory usage
+
 ### Thread Affinity
 Thread affinity is the practice of binding a thread to a specific CPU core, reducing context switches and cache misses. This can significantly improve the predictability and consistency of latency in real-time systems.
+
+**Benefits:**
+- Reduces cache misses and context switches
+- Improves latency predictability
+
+**Mermaid diagram:**
+```mermaid
+flowchart LR
+    ThreadA((Thread A)) -- pinned to --> Core0((Core 0))
+    ThreadB((Thread B)) -- pinned to --> Core1((Core 1))
+```
 
 ---
 
@@ -138,36 +270,7 @@ When the ring buffer is full (all slots occupied by unprocessed events):
 
 On modern CPUs with out-of-order execution and store buffers, writes to memory may not be immediately visible to other threads.
 
-### The Problem
 
-```
-Producer:                      Consumer:
-1. Write data to slot         1. Check sequence number
-2. Publish sequence number    2. Read data from slot
-```
-
-Without proper memory barriers, the consumer might see the updated sequence number before the data is written, reading stale data.
-
-### The Solution: Store-Store Barrier
-
-When publishing, we must ensure all data writes are visible before the sequence number is published:
-
-```java
-// In Disruptor, this is handled via Unsafe.putOrderedLong()
-// which issues a store-store memory barrier
-ringBuffer.publish(sequence);
-```
-
-The `putOrderedLong` (or `setRelease` in newer Disruptor versions) ensures:
-1. All previous writes are flushed from store buffer
-2. Sequence number update is visible to all threads
-3. Consumer can safely read the event data
-
-## 5. The Handler Pipeline
-
-The handler pipeline defines how events flow through the system. SobySequencer uses a diamond dependency pattern:
-
-```
                     [JournalHandler]
                    /                \
 [Publisher] ----->                  -----> [MatchingEngineHandler] -----> [OutputHandler]

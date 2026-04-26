@@ -61,7 +61,7 @@ public class SequencerConfig {
   public boolean equals(Object o) {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
-    SequencerConfig that = (SequencerConfig) o;
+    var that = (SequencerConfig) o;
     return ringBufferSize == that.ringBufferSize
         && enableAffinity == that.enableAffinity
         && sequencerCpuCore == that.sequencerCpuCore
@@ -158,7 +158,7 @@ public class SequencerConfig {
           size <<= 1;
         }
       }
-      SequencerConfig config = new SequencerConfig(this);
+      var config = new SequencerConfig(this);
       // Replace ring buffer size with correct power of 2
       return new SequencerConfig(
           new Builder()
@@ -175,7 +175,7 @@ public class SequencerConfig {
   }
 
   /** Wait strategy types for the disruptor. */
-  public static enum WaitStrategyType {
+  public enum WaitStrategyType {
     BUSY_SPIN,
     YIELDING,
     SLEEPING,

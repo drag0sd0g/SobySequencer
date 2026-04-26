@@ -107,11 +107,11 @@ public class OrderProducer {
    * @return a new Order instance
    */
   private Order createRandomOrder(long orderId) {
-    String symbol = SYMBOLS[ThreadLocalRandom.current().nextInt(SYMBOLS.length)];
-    Side side = ThreadLocalRandom.current().nextBoolean() ? Side.BUY : Side.SELL;
-    OrderType type = ThreadLocalRandom.current().nextBoolean() ? OrderType.LIMIT : OrderType.MARKET;
-    long price = PRICE_MIN + ThreadLocalRandom.current().nextLong(PRICE_MAX - PRICE_MIN + 1);
-    long quantity =
+    var symbol = SYMBOLS[ThreadLocalRandom.current().nextInt(SYMBOLS.length)];
+    var side = ThreadLocalRandom.current().nextBoolean() ? Side.BUY : Side.SELL;
+    var type = ThreadLocalRandom.current().nextBoolean() ? OrderType.LIMIT : OrderType.MARKET;
+    var price = PRICE_MIN + ThreadLocalRandom.current().nextLong(PRICE_MAX - PRICE_MIN + 1);
+    var quantity =
         QUANTITY_MIN + ThreadLocalRandom.current().nextLong(QUANTITY_MAX - QUANTITY_MIN + 1);
     return new Order(orderId, symbol, side, type, price, quantity);
   }

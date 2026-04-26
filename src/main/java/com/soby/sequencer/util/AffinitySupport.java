@@ -17,10 +17,9 @@ public class AffinitySupport {
    * @param core the CPU core number to pin to
    */
   public static void pinCurrentThreadToCore(int core) {
-    try (AffinityLock lock = AffinityLock.acquireLock(core)) {
-      if (lock.cpuId() >= 0) {
-        String threadName = Thread.currentThread().getName();
-        Thread.currentThread().setName(threadName + " [cpu " + lock.cpuId() + "]");
+    try (var affinityLock = AffinityLock.acquireLock(core)) {
+      if (affinityLock.cpuId() >= 0) {
+        pinThreadToCore(affinityLock.cpuId());
       } else {
         LOG.warn("Failed to acquire affinity lock for core {}", core);
       }
@@ -34,13 +33,19 @@ public class AffinitySupport {
    * set.
    */
   public static void pinToAnyCore() {
-    try (AffinityLock lock = AffinityLock.acquireLock()) {
-      if (lock.cpuId() >= 0) {
-        String threadName = Thread.currentThread().getName();
-        Thread.currentThread().setName(threadName + " [cpu " + lock.cpuId() + "]");
+    try (var affinityLock = AffinityLock.acquireLock()) {
+      if (affinityLock.cpuId() >= 0) {
+        pinThreadToCore(affinityLock.cpuId());
+      } else {
+        LOG.warn("Failed to acquire affinity lock for any core");
       }
     } catch (Throwable e) {
       LOG.warn("Failed to pin thread to core: {}", e.getMessage());
     }
+  }
+
+  private static void pinThreadToCore(int coreId) {
+    var threadName = Thread.currentThread().getName();
+    Thread.currentThread().setName(threadName + " [cpu " + coreId + "]");
   }
 }
