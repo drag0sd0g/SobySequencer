@@ -315,12 +315,12 @@ The Disruptor supports complex event processing topologies beyond simple linear 
 
 ```mermaid
 flowchart TD
-    [Publisher] -->|publish| RingBuffer
-    RingBuffer -->|event| JournalHandler
-    RingBuffer -->|event| ReplicaHandler
-    JournalHandler -.depend.-> MatchingEngineHandler
-    ReplicaHandler -.depend.-> MatchingEngineHandler
-    MatchingEngineHandler -->|then| OutputHandler
+    Publisher-->RingBuffer
+    RingBuffer-->JournalHandler
+    RingBuffer-->ReplicaHandler
+    JournalHandler-.->MatchingEngineHandler
+    ReplicaHandler-.->MatchingEngineHandler
+    MatchingEngineHandler-->OutputHandler
 ```
 
 ### Architecture
@@ -504,120 +504,13 @@ public void signal() {
 ### Choosing a Strategy
 
 | Workload | Strategy | Rationale |
-|-----|------|-- |
-| HFT production (isolated CPU) | BUSY_SPIN | Lowest latency, CPU dedicated |
-| General production, shared CPU | YIELDING | Good latency/CPU balance |
-| Background batch processing | SLEEPING | Save CPU cycles |
+|-----|-|---|
+| HFT production | BUSY_SPIN | Lowest latency, CPU dedicated |
+| General production | YIELDING | Good latency/CPU balance |
+| Background batch | SLEEPING | Save CPU cycles |
 | Unit tests | BLOCKING | Fast CI, low CPU load |
 
-### How It Works
-
-1. **Stage 1 (Parallel)**: JournalHandler and ReplicaHandler both see the same event slot simultaneously
-   - JournalHandler writes to disk
-   - ReplicaHandler would send to backup (stub for now)
-   - Both must complete before next stage
-
-2. **Stage 2 (Sequential)**: MatchingEngineHandler waits for both parallel handlers to complete
-   - Uses `SequenceBarrier` to track progress
-   - Processes order book matching
-
-3. **Stage 3 (Sequential)**: OutputHandler runs after matching
-   - Logs results
-   - (Would publish execution reports in production)
-
-### Diamond Pattern Benefits
-
-- Parallel execution for independent operations (journal + replica)
--Guarantees ordering within each branch
-- No data copying - all handlers see the same event slot
-
-### Sequence Barriers
-
-Each consumer tracks its progress via a `Sequence` object. The Disruptor uses these to:
-- Track which events each handler has processed
-- Ensure consumers don't leapfrog each other
-- Implement back-pressure when needed
-
-## 6. Wait Strategies
-
-The wait strategy determines how consumers/producer wait when there's no work to do or no slots available.
-
-### BusySpinWaitStrategy
-
-```
- while (sequence < cursor) {
-     // Spin - keep checking
- }
-```
-
-**Pros:**
-- Lowest latency (no context switch overhead)
-- Best for CPU-bound workloads
-
-**Cons:**
-- 100% CPU usage on waiting thread
-- Not suitable for shared CPU environments
-
-**Use when:** Dedicated cores, lowest latency required
-
-### YieldingWaitStrategy
-
-```
- while (sequence < cursor) {
-     Thread.yield();
- }
-```
-
-**Pros:**
-- Lower CPU usage than busy spin
-- Still relatively low latency
-
-**Cons:**
-- Some scheduler overhead
-- Latency more variable
-
-**Use when:** Shared CPU environments, acceptable latency
-
-### SleepingWaitStrategy
-
-```
- while (sequence < cursor) {
-     LockSupport.parkNanos(1000);  // Sleep 1 microsecond
- }
-```
-
-**Pros:**
-- Very low CPU usage
-- Good for low-throughput scenarios
-
-**Cons:**
-- Higher latency (sleep granularity)
-- Not suitable for high-frequency trading
-
-**Use when:** Low throughput, power-constrained environments
-
-### BlockingWaitStrategy
-
-```
- while (sequence < cursor) {
-     lock.lock();
-     try {
-         condition.await();
-     } finally {
-         lock.unlock();
-     }
- }
-```
-
-**Pros:**
-- Zero CPU when waiting
-- Fast wake-up time
-
-**Cons:**
-- Context switch overhead
-- Latency spikes when waking up
-
-**Use when:** Tests, low-throughput production
+---
 
 ## 7. The Journal (Memory-Mapped I/O)
 
@@ -682,7 +575,7 @@ Reading would reverse the process, using `getLong()` and `get()` to extract fiel
 ### Performance Comparison
 
 | Operation | FileOutputStream | MappedByteBuffer |
-|-----|------|-----|
+|-|-|--|
 | Write 64KB | ~2ms (syscalls) | ~0.1ms (cache) |
 | Read 64KB | ~1ms | ~0.05ms |
 | fsync | ~10ms | Asynchronous |
@@ -883,7 +776,7 @@ private void matchLimitBuyOrderAgainstAsks(OrderEvent buyEvent) {
 ### Complexity Analysis
 
 | Operation | Complexity | Details |
-|-----|--------|--------|
+|-|----|--|
 | Add order to empty price level | O(log p) | p = number of price levels |
 | Add order to existing price level | O(1) | Append to ArrayDeque |
 | Match at best price | O(1) | firstEntry() + peekFirst() |
@@ -917,7 +810,7 @@ Accurate latency measurement is critical for understanding system performance an
 Averages can be dangerously misleading in low-latency systems. Consider two systems processing the same number of requests:
 
 | System | 99% of requests | 1% of requests | Mean | p99 |
-|------|----------------|----------------|------|-----|
+|-|---|----|--- |--|
 | A (consistent) | 10µs | 10µs | 10µs | 10µs |
 | B (jittery) | 5µs | 5000µs | 55µs | 5000µs |
 
