@@ -14,7 +14,8 @@ import com.soby.sequencer.event.OrderEventFactory;
 import com.soby.sequencer.handler.JournalHandler;
 import com.soby.sequencer.handler.MatchingEngineHandler;
 import com.soby.sequencer.handler.OutputHandler;
-import com.soby.sequencer.model.Order;
+import com.soby.sequencer.model.OrderType;
+import com.soby.sequencer.model.Side;
 import com.soby.sequencer.util.AffinitySupport;
 import com.soby.sequencer.util.LatencyRecorder;
 import java.io.IOException;
@@ -103,29 +104,22 @@ public class Sequencer {
     disruptor.start();
   }
 
-  /**
-   * Publish an order to the sequencer. Zero-allocation on the publish path - uses a pre-allocated
-   * event slot.
-   *
-   * @param order the order to publish
-   */
-  public void publishOrder(Order order) {
+  public void publishOrder(
+      long orderId, String symbol, Side side, OrderType type, long price, long quantity) {
     RingBuffer<OrderEvent> ringBuffer = disruptor.getRingBuffer();
     long sequence = ringBuffer.next();
     try {
       var event = ringBuffer.get(sequence);
-      // Populate the event slot
       event.setSequenceNumber(sequence);
-      event.setOrderId(order.orderId());
-      event.setSymbol(order.symbol());
-      event.setSide(order.side());
-      event.setType(order.type());
-      event.setPrice(order.price());
-      event.setQuantity(order.quantity());
+      event.setOrderId(orderId);
+      event.setSymbol(symbol);
+      event.setSide(side);
+      event.setType(type);
+      event.setPrice(price);
+      event.setQuantity(quantity);
       event.setTimestampNanos(System.nanoTime());
       event.setState(OrderEvent.EventState.PUBLISHED);
     } finally {
-      // release barrier ensures event data is visible before publishing sequence
       ringBuffer.publish(sequence);
     }
   }

@@ -2,6 +2,8 @@ package com.soby.sequencer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.soby.sequencer.model.OrderType;
+import com.soby.sequencer.model.Side;
 import com.soby.sequencer.util.LatencyRecorder;
 import org.junit.jupiter.api.*;
 
@@ -75,14 +77,7 @@ public class SequencerTest {
 
   @Test
   public void testGetNextSequenceAfterPublish() throws Exception {
-    sequencer.publishOrder(
-        new com.soby.sequencer.model.Order(
-            1L,
-            "AAPL",
-            com.soby.sequencer.model.Side.BUY,
-            com.soby.sequencer.model.OrderType.LIMIT,
-            100L,
-            10L));
+    sequencer.publishOrder(1L, "AAPL", Side.BUY, OrderType.LIMIT, 100L, 10L);
 
     Thread.sleep(100);
 

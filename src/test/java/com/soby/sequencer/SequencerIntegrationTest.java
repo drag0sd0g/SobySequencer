@@ -4,7 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.soby.sequencer.handler.JournalHandler;
 import com.soby.sequencer.handler.MatchingEngineHandler;
-import com.soby.sequencer.model.Order;
+import com.soby.sequencer.model.OrderType;
+import com.soby.sequencer.model.Side;
 import com.soby.sequencer.producer.OrderProducer;
 import java.io.File;
 import java.io.IOException;
@@ -98,37 +99,22 @@ public class SequencerIntegrationTest {
 
   @Test
   public void testJournalEntriesAreContiguous() throws Exception {
-    // Start the sequencer
     sequencer.start();
 
-    // Publish 100 orders
     for (long i = 0; i < 100; i++) {
-      sequencer.publishOrder(
-          new Order(
-              i,
-              "TEST",
-              com.soby.sequencer.model.Side.BUY,
-              com.soby.sequencer.model.OrderType.LIMIT,
-              100L,
-              10L));
+      sequencer.publishOrder(i, "TEST", Side.BUY, OrderType.LIMIT, 100L, 10L);
     }
 
-    // Wait for processing
     Thread.sleep(500);
 
-    // Verify journal position matches published count
     JournalHandler journalHandler = sequencer.getJournalHandler();
     assertNotNull(journalHandler, "Journal handler should exist");
-
-    // The journal handler records latencies, but we need to check if entries were written
-    // We can verify by checking sequence numbers in events
 
     sequencer.shutdown();
   }
 
   @Test
   public void testPublishingRateDoesNotDropEvents() throws Exception {
-    // Use blocking wait strategy to avoid backpressure issues
     SequencerConfig config =
         new SequencerConfig.Builder()
             .ringBufferSize(256)
@@ -140,30 +126,19 @@ public class SequencerIntegrationTest {
     Sequencer testSequencer = new Sequencer(config);
     testSequencer.start();
 
-    // Publish in batches to avoid overwhelming the ring buffer
     int totalOrders = 1000;
     int batchSize = 100;
 
     for (int batch = 0; batch < totalOrders / batchSize; batch++) {
       for (int i = 0; i < batchSize; i++) {
         long orderId = batch * batchSize + i;
-        testSequencer.publishOrder(
-            new Order(
-                orderId,
-                "TEST",
-                com.soby.sequencer.model.Side.BUY,
-                com.soby.sequencer.model.OrderType.LIMIT,
-                100L,
-                10L));
+        testSequencer.publishOrder(orderId, "TEST", Side.BUY, OrderType.LIMIT, 100L, 10L);
       }
-      // Brief pause between batches
       Thread.sleep(10);
     }
 
-    // Wait for all events to be processed
     Thread.sleep(1000);
 
-    // Verify all orders were processed (no drops)
     long cursor = testSequencer.getCursor();
     assertEquals(totalOrders - 1, cursor, "Should process all " + totalOrders + " orders");
 

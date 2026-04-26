@@ -1,7 +1,6 @@
 package com.soby.sequencer.producer;
 
 import com.soby.sequencer.Sequencer;
-import com.soby.sequencer.model.Order;
 import com.soby.sequencer.model.OrderType;
 import com.soby.sequencer.model.Side;
 import java.util.concurrent.ThreadLocalRandom;
@@ -34,16 +33,15 @@ public class OrderProducer {
     this.endToEndLatencies = new long[capacity];
   }
 
-  /**
-   * Publish a single order to the sequencer and record its latency.
-   *
-   * @param orderId the unique order ID
-   * @return the end-to-end latency in nanoseconds
-   */
   public long publishOrder(long orderId) {
-    long startTime = System.nanoTime();
-    Order order = createRandomOrder(orderId);
-    sequencer.publishOrder(order);
+    var startTime = System.nanoTime();
+    var symbol = SYMBOLS[ThreadLocalRandom.current().nextInt(SYMBOLS.length)];
+    var side = ThreadLocalRandom.current().nextBoolean() ? Side.BUY : Side.SELL;
+    var type = ThreadLocalRandom.current().nextBoolean() ? OrderType.LIMIT : OrderType.MARKET;
+    var price = PRICE_MIN + ThreadLocalRandom.current().nextLong(PRICE_MAX - PRICE_MIN + 1);
+    var quantity =
+        QUANTITY_MIN + ThreadLocalRandom.current().nextLong(QUANTITY_MAX - QUANTITY_MIN + 1);
+    sequencer.publishOrder(orderId, symbol, side, type, price, quantity);
     return System.nanoTime() - startTime;
   }
 
@@ -97,22 +95,5 @@ public class OrderProducer {
   /** Reset the latency buffer for a new benchmark run. */
   public void reset() {
     latencyIndex = 0;
-  }
-
-  /**
-   * Create a random order with synthetic data. Uses ThreadLocalRandom for zero-contention random
-   * number generation.
-   *
-   * @param orderId the order ID
-   * @return a new Order instance
-   */
-  private Order createRandomOrder(long orderId) {
-    var symbol = SYMBOLS[ThreadLocalRandom.current().nextInt(SYMBOLS.length)];
-    var side = ThreadLocalRandom.current().nextBoolean() ? Side.BUY : Side.SELL;
-    var type = ThreadLocalRandom.current().nextBoolean() ? OrderType.LIMIT : OrderType.MARKET;
-    var price = PRICE_MIN + ThreadLocalRandom.current().nextLong(PRICE_MAX - PRICE_MIN + 1);
-    var quantity =
-        QUANTITY_MIN + ThreadLocalRandom.current().nextLong(QUANTITY_MAX - QUANTITY_MIN + 1);
-    return new Order(orderId, symbol, side, type, price, quantity);
   }
 }
