@@ -59,9 +59,7 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
    * @return the journal position after writing
    */
   public long journal(OrderEvent event) {
-    long startTime = System.nanoTime();
-
-    int entryOffset = (int) (position % MAX_EVENTS) * ENTRY_SIZE;
+    var entryOffset = (int) (position % MAX_EVENTS) * ENTRY_SIZE;
     mappedBuffer.putLong(entryOffset, event.getSequenceNumber());
     mappedBuffer.putLong(entryOffset + 8, event.getOrderId());
     mappedBuffer.putLong(entryOffset + 16, event.getPrice());
@@ -69,45 +67,11 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
     mappedBuffer.put(entryOffset + 32, event.getSide().getValue());
     mappedBuffer.put(entryOffset + 33, event.getType().getValue());
 
-    long journalCompletionTime = System.nanoTime();
+    var journalCompletionTime = System.nanoTime();
     position++;
 
     // Record latency from event original timestamp to journal completion
-    long latency = journalCompletionTime - event.getTimestampNanos();
-    latencyRecorder.record(latency);
-
-    return position;
-  }
-
-  /**
-   * Write an event to the journal. Records latency from event timestamp to journal write
-   * completion. Convenience method that extracts data directly from event fields.
-   *
-   * @param sequenceNumber the sequence number
-   * @param orderId the order ID
-   * @param price the price
-   * @param quantity the quantity
-   * @param side the side value
-   * @param type the type value
-   * @return the journal position after writing
-   */
-  public long journal(
-      long sequenceNumber, long orderId, long price, long quantity, byte side, byte type) {
-    long startTime = System.nanoTime();
-
-    int entryOffset = (int) (position % MAX_EVENTS) * ENTRY_SIZE;
-    mappedBuffer.putLong(entryOffset, sequenceNumber);
-    mappedBuffer.putLong(entryOffset + 8, orderId);
-    mappedBuffer.putLong(entryOffset + 16, price);
-    mappedBuffer.putLong(entryOffset + 24, quantity);
-    mappedBuffer.put(entryOffset + 32, side);
-    mappedBuffer.put(entryOffset + 33, type);
-
-    long journalCompletionTime = System.nanoTime();
-    position++;
-
-    // Record latency from event original timestamp to journal completion
-    long latency = journalCompletionTime - startTime;
+    var latency = journalCompletionTime - event.getTimestampNanos();
     latencyRecorder.record(latency);
 
     return position;
@@ -156,7 +120,7 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
    *
    * @return journal file path
    */
-  public String getJournalFilePath() {
+  String getJournalFilePath() {
     return journalFile.getAbsolutePath();
   }
 
@@ -165,7 +129,7 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
    *
    * @return file channel
    */
-  public FileChannel getFileChannel() {
+  FileChannel getFileChannel() {
     return fileChannel;
   }
 
@@ -174,16 +138,7 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
    *
    * @return latency recorder
    */
-  public LatencyRecorder getLatencyRecorder() {
+  LatencyRecorder getLatencyRecorder() {
     return latencyRecorder;
-  }
-
-  /**
-   * Get the journal file for testing.
-   *
-   * @return journal file
-   */
-  public File getJournalFile() {
-    return journalFile;
   }
 }
