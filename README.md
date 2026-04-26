@@ -147,7 +147,7 @@ Just provides a simplified, readable way to run common commands. The `justfile` 
 
 ## Architecture
 
-See `ARCHITECTURE.md` for detailed technical documentation.
+See @docs/ARCHITECTURE.md for detailed technical documentation.
 
 ## License
 

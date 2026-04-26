@@ -172,16 +172,6 @@ public class SequencerConfig {
     }
 
     public Builder() {}
-
-    private Builder(Builder other) {
-      this.ringBufferSize = other.ringBufferSize;
-      this.waitStrategy = other.waitStrategy;
-      this.enableAffinity = other.enableAffinity;
-      this.sequencerCpuCore = other.sequencerCpuCore;
-      this.journalFilePath = other.journalFilePath;
-      this.warmupPublishCount = other.warmupPublishCount;
-      this.benchmarkPublishCount = other.benchmarkPublishCount;
-    }
   }
 
   /** Wait strategy types for the disruptor. */

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LMAX Disruptor — Interactive Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ct: #1a1a1a; --cs: #666; --cb: #ffffff; --cb2: #f5f5f0;
+    --brd: rgba(0,0,0,0.12); --brd2: rgba(0,0,0,0.2);
+    --font: system-ui,-apple-system,sans-serif; --mono: 'Fira Mono','Courier New',monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ct: #e8e8e0; --cs: #888780; --cb: #141414; --cb2: #1a1a1a; --brd: rgba(255,255,255,0.1); --brd2: rgba(255,255,255,0.18); }
+  }
+  body { font-family: var(--font); background: var(--cb2); color: var(--ct); min-height: 100vh; padding: 2rem 1rem; }
+  .outer { max-width: 760px; margin: 0 auto; background: var(--cb); border-radius: 12px; border: 0.5px solid var(--brd); padding: 2rem; }
+  h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+  .sub { font-size: 14px; color: var(--cs); margin-bottom: 1.5rem; }
+  nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 2rem; }
+  nav button { font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--brd2); background: var(--cb); color: var(--cs); cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+  nav button.on { background: #1D9E75; border-color: #1D9E75; color: #E1F5EE; }
+  nav button:hover:not(.on) { background: var(--cb2); }
+  .sec { display: none; } .sec.on { display: block; }
+  h2 { font-size: 17px; font-weight: 500; margin-bottom: 0.4rem; }
+  .dsub { font-size: 14px; color: var(--cs); margin-bottom: 1.25rem; line-height: 1.6; }
+  .stage { background: var(--cb2); border-radius: 12px; border: 0.5px solid var(--brd); padding: 1.25rem; margin-bottom: 1.25rem; overflow: hidden; }
+  .ctrls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ctrls button { font-size: 13px; padding: 6px 16px; border-radius: 20px; border: 0.5px solid var(--brd2); background: var(--cb); color: var(--cs); cursor: pointer; font-family: var(--font); }
+  .ctrls button:hover { background: var(--cb2); }
+  .ctrls select { font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 0.5px solid var(--brd2); background: var(--cb); color: var(--ct); font-family: var(--font); }
+  .leg { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 1rem; }
+  .li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--cs); }
+  .ld { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .note { border-left: 3px solid #1D9E75; background: var(--cb2); border-radius: 0 8px 8px 0; padding: 0.75rem 1rem; margin-top: 1rem; font-size: 13px; color: var(--cs); line-height: 1.6; }
+  .note strong { color: var(--ct); font-weight: 500; }
+  .note code { font-family: var(--mono); font-size: 12px; background: var(--cb); padding: 1px 5px; border-radius: 3px; }
+  .vg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1rem; }
+  .vc { background: var(--cb2); border: 0.5px solid var(--brd); border-radius: 8px; padding: 1rem; }
+  .vc h3 { font-size: 13px; font-weight: 500; margin-bottom: 0.5rem; }
+  .vc p { font-size: 12px; color: var(--cs); line-height: 1.6; }
+  .vc.good { border-top: 2px solid #1D9E75; } .vc.bad { border-top: 2px solid #E24B4A; }
+  .sg { display: grid; grid-template-columns: repeat(auto-fit,minmax(130px,1fr)); gap: 10px; margin-top: 1rem; }
+  .sc { background: var(--cb2); border: 0.5px solid var(--brd); border-radius: 8px; padding: 0.75rem; text-align: center; }
+  .sv { font-size: 22px; font-weight: 500; }
+  .sl { font-size: 11px; color: var(--cs); margin-top: 4px; line-height: 1.4; }
+  .log { font-family: var(--mono); font-size: 11px; color: var(--cs); background: var(--cb2); border: 0.5px solid var(--brd); border-radius: 8px; padding: 0.75rem; margin-top: 1rem; min-height: 60px; max-height: 100px; overflow-y: auto; line-height: 1.7; }
+  .log .ev { color: #1D9E75; }
+  @media (max-width: 500px) { .vg { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="outer">
+  <h1>LMAX Disruptor — interactive explainer</h1>
+  <p class="sub">Six sections. Work through them in order for the full picture.</p>
+
+  <nav>
+    <button class="on" onclick="show('problem',this)">1. The problem</button>
+    <button onclick="show('ring',this)">2. Ring buffer</button>
+    <button onclick="show('seq',this)">3. Sequencing</button>
+    <button onclick="show('pipe',this)">4. Handler pipeline</button>
+    <button onclick="show('wait',this)">5. Wait strategies</button>
+    <button onclick="show('vs',this)">6. vs BlockingQueue</button>
+  </nav>
+
+  <div id="s-problem" class="sec on">
+    <h2>The problem: queues under pressure</h2>
+    <p class="dsub">A trading system needs to pass millions of events/sec between threads. The naive solution — a BlockingQueue — works fine at low throughput but falls apart under load. Why?</p>
+    <div class="stage"><canvas id="qc" style="width:100%;height:180px;"></canvas></div>
+    <div class="ctrls"><button onclick="toggleQ()">Play / Pause</button><span style="font-size:12px;color:var(--cs);">Watch what happens as producers overwhelm consumers</span></div>
+    <div class="note"><strong>Three killers:</strong> (1) Locks — every put/take acquires a mutex, causing context switches. (2) Allocation — new nodes are created per message, pressuring the GC. (3) False sharing — producer and consumer metadata often share a CPU cache line, causing invisible invalidations.</div>
+  </div>
+
+  <div id="s-ring" class="sec">
+    <h2>The ring buffer: pre-allocated, lock-free, cache-friendly</h2>
+    <p class="dsub">Instead of a dynamic queue, the Disruptor uses a fixed-size circular array of pre-allocated event slots. Producers overwrite slots in place — no allocation, no GC.</p>
+    <div class="stage"><canvas id="rc" style="width:100%;height:185px;"></canvas></div>
+    <div class="ctrls"><button onclick="toggleR()">Play / Pause</button><button onclick="stepR()">Step</button></div>
+    <div class="leg">
+      <div class="li"><div class="ld" style="background:#1D9E75"></div>Published (awaiting consumer)</div>
+      <div class="li"><div class="ld" style="background:#378ADD"></div>Being processed</div>
+      <div class="li"><div class="ld" style="background:#888780"></div>Available (empty)</div>
+      <div class="li"><div class="ld" style="background:#E24B4A"></div>Back-pressure risk</div>
+    </div>
+    <div class="note"><strong>Power of 2 sizing:</strong> With 1024 slots, <code>index = sequence &amp; 1023</code> (bitwise AND) replaces <code>sequence % 1024</code> (division). Division is ~20–80 cycles; bitmasking is 1 cycle. At millions of ops/sec this matters.</div>
+  </div>
+
+  <div id="s-seq" class="sec">
+    <h2>Sequencing: one writer, zero contention</h2>
+    <p class="dsub">The single writer principle: only one thread claims sequence numbers. No CAS loop, no lock. Downstream consumers each track their own cursor independently.</p>
+    <div class="stage"><canvas id="sc2" style="width:100%;height:185px;"></canvas></div>
+    <div class="ctrls"><button onclick="toggleS()">Play / Pause</button><button onclick="stepS()">Step once</button></div>
+    <div class="log" id="slog">Events will appear here...</div>
+    <div class="note"><strong>Memory barrier on publish:</strong> When the producer calls <code>publish(seq)</code>, a store-release barrier ensures the event data is visible to all consumers before the sequence number is. Without this, a consumer could read a sequence number but see stale event data — a memory visibility bug on modern out-of-order CPUs.</div>
+  </div>
+
+  <div id="s-pipe" class="sec">
+    <h2>Handler pipeline: parallel and sequential stages</h2>
+    <p class="dsub">Multiple handlers consume the same ring buffer. Dependencies are declared explicitly — journal and replica run in parallel first, then the matching engine runs after both complete. No data is copied between stages.</p>
+    <div class="stage"><canvas id="pc" style="width:100%;height:185px;"></canvas></div>
+    <div class="ctrls"><button onclick="toggleP()">Play / Pause</button></div>
+    <div class="note"><strong>Diamond dependency:</strong> Each handler has its own sequence cursor. The matching engine's barrier depends on both the journal and replica cursors — it will not advance past a slot until both have processed it. All handlers read the same memory — zero copying at any stage.</div>
+  </div>
+
+  <div id="s-wait" class="sec">
+    <h2>Wait strategies: trading CPU for latency</h2>
+    <p class="dsub">When no new events are available, consumers must wait. How they wait is the critical trade-off between latency and CPU consumption.</p>
+    <div class="sg">
+      <div class="sc"><div class="sv" style="color:#1D9E75">~20ns</div><div class="sl">BusySpin — lowest latency, 100% CPU, dedicated core required</div></div>
+      <div class="sc"><div class="sv" style="color:#378ADD">~1µs</div><div class="sl">Yielding — spin then Thread.yield(), lower CPU</div></div>
+      <div class="sc"><div class="sv" style="color:#BA7517">~50µs</div><div class="sl">Sleeping — parkNanos, low CPU, variable latency</div></div>
+      <div class="sc"><div class="sv" style="color:#888780">~1ms</div><div class="sl">Blocking — OS condition variable, minimal CPU</div></div>
+    </div>
+    <div class="stage" style="min-height:160px;"><canvas id="wc" style="width:100%;height:150px;"></canvas></div>
+    <div class="ctrls">
+      <label style="font-size:13px;color:var(--cs);">Strategy:</label>
+      <select id="wsel" onchange="setW(this.value)">
+        <option value="busy">BusySpin</option><option value="yield">Yielding</option>
+        <option value="sleep">Sleeping</option><option value="block">Blocking</option>
+      </select>
+      <button onclick="toggleW()">Play / Pause</button>
+    </div>
+    <div class="note" id="wnote"><strong>BusySpin:</strong> Consumer loops continuously checking the sequence counter. Detects new events within nanoseconds. Burns 100% of a CPU core. Only viable when that core is isolated and dedicated to this thread.</div>
+  </div>
+
+  <div id="s-vs" class="sec">
+    <h2>Disruptor vs BlockingQueue: a direct comparison</h2>
+    <p class="dsub">Both solve the producer/consumer problem. The difference is in what they sacrifice to get there.</p>
+    <div class="vg">
+      <div class="vc bad"><h3 style="color:#A32D2D">BlockingQueue</h3><p>Lock on every put and take. New node allocated per message. Head/tail often on same cache line. GC pauses from allocation. Simple API.</p></div>
+      <div class="vc good"><h3 style="color:#0F6E56">Disruptor ring buffer</h3><p>Single producer: no CAS on write path. Pre-allocated slots: zero allocation. Cache-line-padded sequences. Power-of-2 bitmasking for indexing.</p></div>
+      <div class="vc bad"><h3 style="color:#A32D2D">Queue latency profile</h3><p>p99: ~10–50µs under load. Spikes to milliseconds during GC. Wide, unpredictable tail latency.</p></div>
+      <div class="vc good"><h3 style="color:#0F6E56">Disruptor latency profile</h3><p>p99: ~200–500ns with BusySpin. p99.9 stays tight — no GC, no lock acquisition, no context switch on the critical path.</p></div>
+      <div class="vc bad"><h3 style="color:#A32D2D">When to use a queue</h3><p>Multiple producers contending. Latency target is milliseconds. Simplicity matters. Bounded memory not required.</p></div>
+      <div class="vc good"><h3 style="color:#0F6E56">When to use Disruptor</h3><p>Single producer. Sub-microsecond latency target. CPU core can be dedicated. Predictable, bounded memory required.</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const D=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+const C={t:D?'#e8e8e0':'#1a1a1a',s:D?'#666':'#888780',bg:D?'#141414':'#fff',bg2:D?'#1a1a1a':'#f5f5f0',brd:D?'#333':'#e0e0d8',
+  g:'#1D9E75',gL:D?'#085041':'#E1F5EE',gD:D?'#9FE1CB':'#085041',
+  b:'#378ADD',bL:D?'#042C53':'#E6F1FB',
+  gr:'#888780',grL:D?'#2C2C2A':'#F1EFE8',
+  r:'#E24B4A',rL:D?'#501313':'#FCEBEB',
+  a:'#BA7517',aL:D?'#412402':'#FAEEDA'};
+
+function show(id,btn){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('on'));
+  document.getElementById('s-'+id).classList.add('on'); btn.classList.add('on');
+  if(id==='ring')initR(); if(id==='seq')initS(); if(id==='pipe')initP();
+  if(id==='wait')initW2(); if(id==='problem')initQ();
+}
+function ctx(id){
+  const cv=document.getElementById(id),rect=cv.parentElement.getBoundingClientRect();
+  cv.width=rect.width-40; cv.height=parseInt(cv.style.height); return cv.getContext('2d');
+}
+function rr(c,x,y,w,h,r){
+  c.beginPath(); c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y); c.closePath();
+}
+function arr(c,x1,y1,x2,y2,col){
+  c.strokeStyle=col; c.lineWidth=1.5; c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2); c.stroke();
+  const a=Math.atan2(y2-y1,x2-x1); c.fillStyle=col; c.beginPath();
+  c.moveTo(x2,y2); c.lineTo(x2-8*Math.cos(a-0.4),y2-8*Math.sin(a-0.4));
+  c.lineTo(x2-8*Math.cos(a+0.4),y2-8*Math.sin(a+0.4)); c.closePath(); c.fill();
+}
+
+let qT=null,qF=0;
+function initQ(){const c=ctx('qc');drawQ(c,0);if(!qT)qT=requestAnimationFrame(function f(){qF++;drawQ(ctx('qc'),qF);qT=requestAnimationFrame(f);});}
+function toggleQ(){if(qT){cancelAnimationFrame(qT);qT=null;}else initQ();}
+function drawQ(c,fr){
+  const w=c.canvas.width,h=c.canvas.height; c.clearRect(0,0,w,h);
+  const t=fr/60,qs=8,fill=Math.min(qs,Math.abs(Math.floor(3+2*Math.sin(t*1.5)+t*0.3)%(qs+2))),cong=fill>6;
+  c.font='11px monospace'; c.fillStyle=C.s;
+  c.fillText('Producer',10,18); c.fillText('Consumer',w-90,18); c.fillText('Queue (heap-allocated nodes)',w/2-100,18);
+  const sw=28,sh=36,sx=w/2-(qs*(sw+3))/2,sy=52;
+  for(let i=0;i<qs;i++){
+    const x=sx+i*(sw+3);
+    c.fillStyle=i<fill?(cong?C.rL:C.gL):C.grL; c.strokeStyle=i<fill?(cong?C.r:C.g):C.brd; c.lineWidth=1;
+    rr(c,x,sy,sw,sh,4); c.fill(); c.stroke();
+    if(i<fill){c.fillStyle=cong?C.r:C.g; c.font='9px monospace'; c.textAlign='center'; c.fillText('obj',x+sw/2,sy+22); c.textAlign='left';}
+  }
+  const px=44,cx2=w-60;
+  c.fillStyle=!cong?C.gL:C.aL; c.strokeStyle=!cong?C.g:C.a; c.lineWidth=1.5;
+  rr(c,px-22,40,52,36,6); c.fill(); c.stroke();
+  c.fillStyle=!cong?C.g:C.a; c.font='11px monospace'; c.textAlign='center';
+  c.fillText(!cong?'PUT':'WAIT',px+4,63); c.textAlign='left';
+  c.fillStyle=fill>0?C.bL:C.grL; c.strokeStyle=fill>0?C.b:C.brd;
+  rr(c,cx2-22,40,52,36,6); c.fill(); c.stroke();
+  c.fillStyle=fill>0?C.b:C.s; c.font='11px monospace'; c.textAlign='center';
+  c.fillText(fill>0?'TAKE':'IDLE',cx2+4,63); c.textAlign='left';
+  if(!cong&&fill<qs)arr(c,px+30,58,sx-2,58,C.g);
+  if(fill>0)arr(c,sx+fill*(sw+3)-2,58,cx2-24,58,C.b);
+  c.fillStyle=cong?C.r:C.s; c.font='12px monospace';
+  c.fillText(cong?'Lock contention — producer blocked. GC pressure building.':'Queue depth: '+fill+' / '+qs+'  |  new Node() per message',10,120);
+  c.fillStyle=C.s; c.font='11px monospace';
+  c.fillText('Heap objects allocated: ~'+(Math.floor(t*12)*1000).toLocaleString(),10,142);
+}
+
+const RS=16; let rT=null,rSt=0,rP=0,rC=0;
+function initR(){if(!rT)rT=requestAnimationFrame(function f(){rSt++;if(rSt%18===0&&rP-rC<RS-2)rP++;if(rSt%28===0&&rC<rP)rC++;drawR(ctx('rc'));rT=requestAnimationFrame(f);});}
+function toggleR(){if(rT){cancelAnimationFrame(rT);rT=null;}else initR();}
+function stepR(){if(rP-rC<RS-2)rP++;if(rC<rP-1)rC++;drawR(ctx('rc'));}
+function drawR(c){
+  const w=c.canvas.width,h=c.canvas.height; c.clearRect(0,0,w,h);
+  const cx=w/2,cy=h/2,r=Math.min(w,h)*0.38;
+  for(let i=0;i<RS;i++){
+    const angle=(i/RS)*Math.PI*2-Math.PI/2,x=cx+r*Math.cos(angle),y=cy+r*Math.sin(angle);
+    const ip=((i-rC%RS+RS)%RS)<(rP-rC)&&i!==rC%RS,ipr=i===rC%RS,tc=(rP-rC)>=RS-2&&i===rP%RS;
+    let fi=C.grL,st=C.brd; if(tc){fi=C.rL;st=C.r;}else if(ipr){fi=C.bL;st=C.b;}else if(ip){fi=C.gL;st=C.g;}
+    c.fillStyle=fi; c.strokeStyle=st; c.lineWidth=1.5;
+    c.beginPath(); c.arc(x,y,16,0,Math.PI*2); c.fill(); c.stroke();
+    c.fillStyle=ip?C.gD:(ipr?(D?'#B5D4F4':'#042C53'):C.s);
+    c.font='10px monospace'; c.textAlign='center'; c.textBaseline='middle'; c.fillText(i,x,y);
+  }
+  c.textAlign='center'; c.textBaseline='middle';
+  c.fillStyle=C.g; c.font='500 12px sans-serif'; c.fillText('P cursor: '+rP,cx-35,cy-12);
+  c.fillStyle=C.b; c.fillText('C cursor: '+rC,cx-35,cy+10);
+  c.fillStyle=C.s; c.font='11px monospace'; c.fillText('depth: '+(rP-rC)+'/'+RS,cx+42,cy);
+  c.textAlign='left'; c.textBaseline='alphabetic';
+}
+
+let sT=null,sSt=0,ss={p:0,j:-1,m:-1};
+function initS(){ss={p:0,j:-1,m:-1};const l=document.getElementById('slog');l.innerHTML='Events will appear here...';if(!sT)sT=requestAnimationFrame(function f(){sSt++;if(sSt%50===0)doS();drawSq(ctx('sc2'));sT=requestAnimationFrame(f);});}
+function toggleS(){if(sT){cancelAnimationFrame(sT);sT=null;}else initS();}
+function stepS(){doS();drawSq(ctx('sc2'));}
+function doS(){
+  if(ss.j<ss.p){ss.j++;logS('<span class="ev">Journal</span> processed seq #'+ss.j);}
+  else if(ss.m<ss.j){ss.m++;logS('<span class="ev">Matcher</span> processed seq #'+ss.m);}
+  else{ss.p++;logS('Producer → claimed seq <strong>#'+ss.p+'</strong> with store-release barrier');}
+}
+function logS(msg){const l=document.getElementById('slog'),d=document.createElement('div');d.innerHTML=msg;l.appendChild(d);l.scrollTop=l.scrollHeight;while(l.children.length>8)l.removeChild(l.firstChild);}
+function drawSq(c){
+  const w=c.canvas.width,h=c.canvas.height; c.clearRect(0,0,w,h);
+  const labs=['Producer','Journal handler','Matcher handler'],seqs=[ss.p,ss.j,ss.m],cols=[C.g,C.b,C.a];
+  const bw=Math.min(160,(w-80)/3),bh=50,gap=(w-3*bw)/4;
+  for(let i=0;i<3;i++){
+    const x=gap+i*(bw+gap),y=28;
+    c.fillStyle=cols[i]+'22'; c.strokeStyle=cols[i]; c.lineWidth=1.5; rr(c,x,y,bw,bh,8); c.fill(); c.stroke();
+    c.fillStyle=cols[i]; c.font='500 12px sans-serif'; c.textAlign='center';
+    c.fillText(labs[i],x+bw/2,y+18); c.font='500 15px monospace'; c.fillText('seq '+seqs[i],x+bw/2,y+40);
+    if(i<2)arr(c,x+bw+4,y+bh/2,x+bw+gap-4,y+bh/2,C.brd);
+  }
+  const l1=ss.p-ss.j,l2=ss.j-ss.m;
+  c.font='11px monospace'; c.textAlign='center';
+  c.fillStyle=l1>3?C.r:C.s; c.fillText('lag: '+l1,gap+bw+gap/2,105);
+  c.fillStyle=l2>3?C.r:C.s; c.fillText('lag: '+l2,gap+2*bw+1.5*gap,105);
+  c.textAlign='left'; c.fillStyle=C.s; c.font='11px monospace';
+  c.fillText('Consumers never block the producer. Back-pressure only when ring wraps around.',4,h-8);
+}
+
+let pT=null,pF=0,ps={p:0,j:-1,rp:-1,m:-1,o:-1};
+function initP(){ps={p:0,j:-1,rp:-1,m:-1,o:-1};if(!pT)pT=requestAnimationFrame(function f(){pF++;if(pF%22===0){if(ps.j<ps.p)ps.j++;if(ps.rp<ps.p)ps.rp++;}if(pF%22===11){const mr=Math.min(ps.j,ps.rp);if(ps.m<mr)ps.m++;if(ps.o<ps.m)ps.o++;if(ps.p-ps.o<6)ps.p++;}drawP(ctx('pc'));pT=requestAnimationFrame(f);});}
+function toggleP(){if(pT){cancelAnimationFrame(pT);pT=null;}else initP();}
+function drawP(c){
+  const w=c.canvas.width,h=c.canvas.height; c.clearRect(0,0,w,h);
+  const nd=[{l:'Producer',s:ps.p,x:.07,y:.45,col:C.g},{l:'Journal',s:ps.j,x:.33,y:.18,col:C.b},{l:'Replica',s:ps.rp,x:.33,y:.78,col:C.b},{l:'Matcher',s:ps.m,x:.62,y:.45,col:C.a},{l:'Output',s:ps.o,x:.90,y:.45,col:C.gr}];
+  const ed=[[0,1],[0,2],[1,3],[2,3],[3,4]];
+  c.lineWidth=1.5; c.setLineDash([4,3]);
+  for(const[a,b]of ed){c.strokeStyle=C.brd;c.beginPath();c.moveTo(nd[a].x*w,nd[a].y*h);c.lineTo(nd[b].x*w,nd[b].y*h);c.stroke();}
+  c.setLineDash([]);
+  for(const n of nd){
+    const x=n.x*w,y=n.y*h,bw=74,bh=40;
+    c.fillStyle=n.col+'22'; c.strokeStyle=n.col; c.lineWidth=1.5; rr(c,x-bw/2,y-bh/2,bw,bh,8); c.fill(); c.stroke();
+    c.fillStyle=n.col; c.font='500 11px sans-serif'; c.textAlign='center'; c.fillText(n.l,x,y-4);
+    c.font='12px monospace'; c.fillText('#'+n.s,x,y+13);
+  }
+  c.fillStyle=C.s; c.font='11px monospace'; c.textAlign='left';
+  c.fillText('Journal + Replica run in parallel. Matcher waits for both. Same ring buffer slot — zero copying.',4,h-6);
+}
+
+let wT=null,wF=0,ws='busy';
+const wN={busy:'<strong>BusySpin:</strong> Consumer loops continuously checking the sequence counter. Detects new events within nanoseconds. Burns 100% of a CPU core. Only viable when that core is isolated and dedicated to this thread.',yield:'<strong>Yielding:</strong> Spin for a number of iterations, then call <code>Thread.yield()</code> to hint the OS scheduler. Balances latency and CPU. Typical latency ~1µs.',sleep:'<strong>Sleeping:</strong> Spin briefly, then call <code>LockSupport.parkNanos(1)</code>. OS decides when to wake. Low CPU, but latency is OS-scheduler-dependent — typically 50–200µs.',block:'<strong>Blocking:</strong> OS-level condition variable (<code>wait/notify</code>). Minimal CPU. Latency spikes to 1ms+ — the OS performs a full context switch to wake the consumer. Only for non-latency-sensitive work.'};
+function setW(v){ws=v;document.getElementById('wnote').innerHTML=wN[v];}
+function initW2(){if(!wT)wT=requestAnimationFrame(function f(){wF++;drawW(ctx('wc'));wT=requestAnimationFrame(f);});}
+function toggleW(){if(wT){cancelAnimationFrame(wT);wT=null;}else initW2();}
+function drawW(c){
+  const w=c.canvas.width,h=c.canvas.height; c.clearRect(0,0,w,h);
+  const t=wF/60,lat={busy:.02,yield:1,sleep:50,block:800},cpu={busy:1,yield:.6,sleep:.15,block:.02};
+  const lt=lat[ws],cp=cpu[ws],bw=w*.62,bh=26;
+  c.fillStyle=C.s; c.font='12px monospace'; c.fillText('Response latency',10,16);
+  c.fillStyle=C.grL; c.strokeStyle=C.brd; c.lineWidth=.5; rr(c,10,22,bw,bh,4); c.fill(); c.stroke();
+  const ln=Math.min(1,lt/1000);
+  c.fillStyle=ln<.01?C.g:ln<.1?C.b:ln<.5?C.a:C.r; rr(c,10,22,Math.max(6,bw*ln),bh,4); c.fill();
+  c.fillStyle=C.t; c.font='11px monospace'; c.fillText(lt<1?lt+' µs':lt+' µs',16,39);
+  c.fillStyle=C.s; c.font='12px monospace'; c.fillText('CPU usage (1 core)',10,68);
+  c.fillStyle=C.grL; c.strokeStyle=C.brd; rr(c,10,74,bw,bh,4); c.fill(); c.stroke();
+  c.fillStyle=cp>.8?C.r:cp>.4?C.a:C.g; rr(c,10,74,Math.max(6,bw*cp),bh,4); c.fill();
+  c.fillStyle=C.t; c.font='11px monospace'; c.fillText(Math.round(cp*100)+'%',16,91);
+  const pu=ws==='busy'?1:ws==='yield'?(Math.sin(t*8)>0?1:0):ws==='sleep'?(Math.sin(t*2)>.3?1:0):(Math.sin(t*.8)>.7?1:0);
+  const cx2=w-55,cy2=h/2-8;
+  c.fillStyle=pu?C.gL:C.grL; c.strokeStyle=pu?C.g:C.brd; c.lineWidth=1.5;
+  c.beginPath(); c.arc(cx2,cy2,20,0,Math.PI*2); c.fill(); c.stroke();
+  c.fillStyle=pu?C.gD:C.s; c.font='9px monospace'; c.textAlign='center';
+  c.fillText(pu?'AWAKE':'WAIT',cx2,cy2+4);
+  c.fillStyle=C.s; c.font='11px monospace'; c.fillText('consumer',cx2,h-6);
+  c.textAlign='left';
+}
+
+window.addEventListener('load',()=>{initQ();});
+</script>
+</body>
+</html>

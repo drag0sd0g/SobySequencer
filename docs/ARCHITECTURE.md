@@ -1,4 +1,70 @@
+
 # SobySequencer Architecture
+
+## Glossary of Disruptor and Concurrency Terminology
+
+This section provides in-depth explanations of the core concepts and terminology used throughout this document and in the SobySequencer codebase. Understanding these terms is essential for grasping the architecture and performance characteristics of the system.
+
+### Disruptor
+The Disruptor is a high-performance inter-thread messaging library developed by LMAX. It provides a lock-free, low-latency mechanism for passing data between threads, using a pre-allocated ring buffer and a set of coordinated consumers (handlers). The Disruptor pattern is designed to minimize contention, garbage collection, and context switching, making it ideal for high-throughput, low-latency systems such as trading engines.
+
+### Ring Buffer
+A ring buffer (also known as a circular buffer) is a fixed-size, pre-allocated array that wraps around when the end is reached. In the Disruptor, the ring buffer holds event objects (such as orders) that are passed from producers to consumers. The buffer size is always a power of two, enabling efficient index calculation using bitwise operations. Each slot in the buffer is reused, eliminating the need for frequent memory allocation and reducing garbage collection pressure.
+
+**Key properties:**
+- Fixed size, power-of-two length
+- Pre-allocated objects (no runtime allocation)
+- Circular addressing (wraps around)
+- Used for high-speed producer-consumer communication
+
+### Sequence
+A sequence is a monotonically increasing number that represents the position of an event in the ring buffer. Each producer and consumer maintains its own sequence value. Sequences are used to coordinate access to the buffer, track progress, and implement back-pressure. In the Disruptor, the sequence is the primary means of synchronization, replacing locks.
+
+### Sequence Barrier
+A sequence barrier is a coordination mechanism that allows a consumer to wait until a specific sequence (or set of sequences) has been published by producers or processed by other consumers. Sequence barriers are used to enforce dependencies between handlers (e.g., ensuring that the MatchingEngineHandler does not process an event until the JournalHandler and ReplicaHandler have finished with it).
+
+### Wait Strategy
+A wait strategy defines how a thread waits for a condition to be met (such as a new event being available in the ring buffer). The Disruptor provides several wait strategies, each with different trade-offs between latency and CPU usage:
+- **BusySpinWaitStrategy**: The thread spins in a tight loop, checking the condition repeatedly. Lowest latency, highest CPU usage.
+- **YieldingWaitStrategy**: The thread yields control to the scheduler when waiting, reducing CPU usage but increasing latency slightly.
+- **SleepingWaitStrategy**: The thread sleeps for short intervals, minimizing CPU usage but increasing latency further.
+- **BlockingWaitStrategy**: The thread blocks on a lock or condition variable, using no CPU while waiting but incurring the highest latency due to context switches.
+
+### Memory Barrier
+A memory barrier (or fence) is a CPU instruction that enforces ordering constraints on memory operations. In concurrent programming, memory barriers ensure that writes performed by one thread are visible to other threads in the correct order. The Disruptor uses memory barriers (e.g., via `Unsafe.putOrderedLong` or `VarHandle.setRelease`) to guarantee that event data is fully written before the sequence number is published, preventing consumers from seeing stale or partially written data.
+
+### Single Writer Principle (SWP)
+The Single Writer Principle states that only one thread should write to a given memory location at any time. By adhering to this principle, the Disruptor eliminates the need for locks on the write path, reducing contention and improving throughput. In SobySequencer, the producer thread is the only writer to each slot in the ring buffer, while consumers only read from their assigned slots.
+
+### Producer and Consumer
+- **Producer**: A thread or component that creates and publishes events into the ring buffer. In SobySequencer, the OrderProducer is responsible for publishing new orders.
+- **Consumer (Handler)**: A thread or component that processes events from the ring buffer. Handlers in SobySequencer include the JournalHandler, ReplicaHandler, MatchingEngineHandler, and OutputHandler.
+
+### Back-pressure
+Back-pressure is a mechanism that prevents producers from overwhelming consumers. In the Disruptor, back-pressure is implemented by blocking the producer when the ring buffer is full (i.e., when all slots are occupied by unprocessed events). The producer must wait until consumers have advanced their sequences and freed up slots.
+
+### False Sharing
+False sharing occurs when multiple threads modify variables that reside on the same CPU cache line, causing unnecessary cache invalidations and performance degradation. The Disruptor mitigates false sharing by padding sequence variables so that each resides on its own cache line, ensuring that updates by one thread do not interfere with others.
+
+### Cache Line
+A cache line is the smallest unit of memory that can be transferred between main memory and the CPU cache. On modern CPUs, a cache line is typically 64 bytes. Proper alignment and padding of frequently updated variables (such as sequences) to cache line boundaries is critical for performance in concurrent systems.
+
+### MappedByteBuffer
+MappedByteBuffer is a Java NIO class that allows a file to be mapped directly into memory. This enables high-speed, zero-copy I/O operations, as reads and writes to the buffer are translated directly to file offsets by the operating system. In SobySequencer, the journal uses MappedByteBuffer to persist events to disk with minimal overhead.
+
+### Order Book
+An order book is a data structure that tracks buy and sell orders for a financial instrument, organized by price and time. The matching engine uses the order book to match incoming orders according to price-time priority, ensuring fair and efficient execution.
+
+### Latency Percentiles (p50, p99, p99.9, etc.)
+Latency percentiles are statistical measures that describe the distribution of response times in a system. For example, p99.9 latency is the value below which 99.9% of all observed latencies fall. Tracking high percentiles is critical for understanding and optimizing the tail behavior of low-latency systems.
+
+### HdrHistogram
+HdrHistogram is a high dynamic range histogram library designed for recording and analyzing latency data with high precision and a wide value range. It is used in SobySequencer to measure and report latency percentiles.
+
+### Thread Affinity
+Thread affinity is the practice of binding a thread to a specific CPU core, reducing context switches and cache misses. This can significantly improve the predictability and consistency of latency in real-time systems.
+
+---
 
 ## 1. Overview
 
