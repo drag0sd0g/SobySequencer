@@ -1,154 +1,168 @@
 # SobySequencer
 
-A production-quality Java low-latency event sequencer built on the LMAX Disruptor.
-
-And this is Soby:
 ```
    ()__()
   (='.'=)
   (")_(")
 ```
 
+A production-quality, low-latency event sequencer for Java, built on the [LMAX Disruptor](https://lmax-exchange.github.io/disruptor/) pattern. It models the core of a trading infrastructure component: a high-throughput order ingestion pipeline with durable journaling, parallel stage processing, and price-time priority matching.
+
+**Key characteristics:**
+- p99.9 latencies in the low-microsecond range on modern hardware
+- 1M–10M events/sec throughput (single producer)
+- Zero GC pressure on the hot path — fully pre-allocated ring buffer
+- Diamond dependency pipeline: journal ∥ replica → match → output
+
+---
+
 ## Requirements
 
 - Java 21+
-- Gradle (wrapper included)
-- [Just](https://github.com/casey/just) (optional, for simplified command recipes)
+- Gradle (wrapper included — no local Gradle installation needed)
+- [Just](https://github.com/casey/just) *(optional, for simplified command recipes)*
 
-## Build
+---
+
+## Quick Start
 
 ```bash
+# Build and run tests
 ./gradlew build
-```
 
-Or using Just:
-
-```bash
-just build
-```
-
-## Run
-
-```bash
+# Run the benchmark with default configuration
 ./gradlew run
 ```
 
-Or using Just:
+Expected output:
 
-```bash
-just run-default
+```
+[SobySequencer] Warmup completed at 1,234,567.89 events/sec
+[SobySequencer] Benchmark completed at 987,654.32 events/sec
+
+Journal Handler Latency:
+  count:  1,000,000
+  mean:   1,234 ns
+  p50:      980 ns
+  p99:    2,304 ns
+  p99.9:  4,096 ns
+  max:  125,312 ns
+
+Matching Engine Handler Latency:
+  count:  1,000,000
+  mean:     312 ns
+  p50:      256 ns
+  p99:      768 ns
+  p99.9:  1,536 ns
+  max:   45,056 ns
 ```
 
-## Test
-
-```bash
-./gradlew test
-```
-
-Or using Just:
-
-```bash
-just test
-```
-
-## Code Formatting
-
-This project uses Google Java Style with Spotless. To format your code:
-
-```bash
-./gradlew spotlessApply
-```
-
-Or using Just:
-
-```bash
-just format
-```
-
-To check if code is properly formatted (used in CI):
-
-```bash
-./gradlew spotlessCheck
-```
-
-Or using Just:
-
-```bash
-just format-check
-```
+---
 
 ## Configuration
 
-Configuration is done via `SequencerConfig` in `Main.java` or via system properties:
+Pass configuration as system properties:
 
 ```bash
-./gradlew run -DringBufferSize=8192 -DwaitStrategy=YIELDING -DenableAffinity=false
+./gradlew run \
+  -DringBufferSize=8192 \
+  -DwaitStrategy=YIELDING \
+  -DenableAffinity=false
 ```
 
-### Configuration Options
+| Property | Default | Description |
+|----------|---------|-------------|
+| `ringBufferSize` | `4096` | Ring buffer capacity; automatically rounded up to the next power of 2 |
+| `waitStrategy` | `BUSY_SPIN` | `BUSY_SPIN` / `YIELDING` / `SLEEPING` / `BLOCKING` — see [Architecture](docs/ARCHITECTURE.md#6-wait-strategies) |
+| `enableAffinity` | `true` | Pin the producer thread to a specific CPU core |
+| `cpuCore` | `0` | CPU core index for thread affinity |
+| `warmupPublishCount` | `100000` | Events published in the warm-up phase (discarded from latency stats) |
+| `benchmarkPublishCount` | `1000000` | Events published in the measured benchmark phase |
 
-- `ringBufferSize` - Ring buffer size (must be power of 2, default: 4096)
-- `waitStrategy` - Wait strategy: BUSY_SPIN, YIELDING, SLEEPING, BLOCKING
-- `enableAffinity` - Enable CPU thread affinity (default: true)
-- `cpuCore` - CPU core to pin the sequencer thread
-- `warmupPublishCount` - Number of orders for warmup phase (default: 100000)
-- `benchmarkPublishCount` - Number of orders for benchmark phase (default: 1000000)
+**Choosing a wait strategy:**
 
-## Recipes (Using Just)
+| Environment | Recommended strategy | Reason |
+|-------------|---------------------|--------|
+| HFT production, dedicated cores | `BUSY_SPIN` | Lowest latency (~100–200 ns detection) |
+| Shared cores, general production | `YIELDING` | Good latency/CPU balance |
+| Batch / power-constrained | `SLEEPING` | Minimal CPU usage |
+| Unit tests / CI | `BLOCKING` | Zero CPU spin, fast CI |
 
-Just provides a simplified, readable way to run common commands. The `justfile` includes:
+---
 
-### Build & Test
+## Building and Testing
+
+```bash
+# Full build (compile + test + format check + coverage)
+./gradlew build
+
+# Run tests only
+./gradlew test
+
+# Apply Google Java Style formatting
+./gradlew spotlessApply
+
+# Verify formatting (used in CI)
+./gradlew spotlessCheck
+```
+
+Code coverage is enforced at **70% line coverage** via JaCoCo. Format is enforced via [Spotless](https://github.com/diffplug/spotless) with `google-java-format 1.19.2`.
+
+---
+
+## Just Recipes
+
+[Just](https://github.com/casey/just) provides convenient shorthand for common workflows. Run `just help` to list all recipes.
+
+### Build & test
 
 | Command | Description |
 |---------|-------------|
-| `just build` | Run full build with tests |
-| `just test` | Run tests only |
-| `just clean` | Clean build artifacts |
-| `just clean-build` | Clean and rebuild |
+| `just build` | Full build with tests |
+| `just test` | Tests only |
+| `just clean` | Delete build artifacts |
+| `just clean-build` | Clean then full build |
+| `just quick-build` | Compile only, skip tests |
 
 ### Formatting
 
 | Command | Description |
 |---------|-------------|
 | `just format` | Apply Google Java formatting |
-| `just format-check` | Check formatting (CI-friendly) |
+| `just format-check` | Verify formatting (CI-friendly) |
 
-### Running with Different Configurations
+### Running benchmarks
 
 | Command | Description |
 |---------|-------------|
-| `just run-default` | Run with default config |
-| `just run-small-ring-buffer` | Run with 1024 ring buffer |
-| `just run-large-ring-buffer` | Run with 8192 ring buffer |
-| `just run-huge-ring-buffer` | Run with 16384 ring buffer |
-| `just run-busy-spin` | Use busy-spin wait strategy (lowest latency) |
-| `just run-yielding` | Use yielding wait strategy |
-| `just run-blocking` | Use blocking wait strategy (lowest CPU) |
+| `just run-default` | Default configuration |
+| `just run-busy-spin` | Busy-spin wait strategy (lowest latency) |
+| `just run-yielding` | Yielding wait strategy |
+| `just run-blocking` | Blocking wait strategy (lowest CPU) |
 | `just run-no-affinity` | Disable CPU affinity |
 | `just run-cpu-1` | Pin to CPU core 1 |
 | `just run-cpu-2` | Pin to CPU core 2 |
-
-### Benchmark Recipes
-
-| Command | Description |
-|---------|-------------|
-| `just run-warmup-10k-benchmark-100k` | 10k warmup, 100k benchmark |
-| `just run-warmup-100k-benchmark-1m` | 100k warmup, 1M benchmark |
+| `just run-small-ring-buffer` | 1 024-slot ring buffer |
+| `just run-large-ring-buffer` | 8 192-slot ring buffer |
+| `just run-huge-ring-buffer` | 16 384-slot ring buffer |
+| `just run-warmup-10k-benchmark-100k` | 10k warm-up, 100k benchmark |
+| `just run-warmup-100k-benchmark-1m` | 100k warm-up, 1M benchmark |
 
 ### Distribution
 
 | Command | Description |
 |---------|-------------|
-| `just dist` | Create zip distribution |
-| `just dist-tar` | Create tar distribution |
-| `just quick-build` | Build without tests |
-| `just quick-test` | Run tests without build |
+| `just dist` | Create a `.zip` distribution |
+| `just dist-tar` | Create a `.tar` distribution |
+
+---
 
 ## Architecture
 
-See @docs/ARCHITECTURE.md for detailed technical documentation.
+For a detailed technical description of the Disruptor pattern, ring buffer mechanics, sequence barriers, handler pipeline, journal design, matching engine, latency measurement methodology, and production hardening guidelines, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
 
 ## License
 
-See LICENSE file.
+See [LICENSE](LICENSE).
