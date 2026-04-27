@@ -95,10 +95,7 @@ public class JournalHandler implements EventHandler<OrderEvent>, AutoCloseable {
    */
   @Override
   public void onEvent(OrderEvent event, long sequence, boolean endOfBatch) {
-    // Record latency from event timestamp to journal write
     journal(event);
-    event.setSequenceNumber(sequence);
-    // Event state is handled by downstream handlers
   }
 
   /**

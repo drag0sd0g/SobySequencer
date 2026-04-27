@@ -37,15 +37,36 @@ public class LatencyRecorder {
    */
   public void printReport(String label) {
     System.out.println(label + " Latency:");
-    System.out.println("  p50:    " + format(histogram.getValueAtPercentile(50.0)) + " ns");
-    System.out.println("  p95:    " + format(histogram.getValueAtPercentile(95.0)) + " ns");
-    System.out.println("  p99:    " + format(histogram.getValueAtPercentile(99.0)) + " ns");
-    System.out.println("  p99.9:  " + format(histogram.getValueAtPercentile(99.9)) + " ns");
-    System.out.println("  p99.99: " + format(histogram.getValueAtPercentile(99.99)) + " ns");
-    System.out.println("  max:    " + format(histogram.getMaxValue()) + " ns");
+    System.out.printf("  count:  %,d%n", histogram.getTotalCount());
+    System.out.println("  mean:   " + formatNanos((long) histogram.getMean()) + " ns");
+    System.out.println("  p50:    " + formatNanos(histogram.getValueAtPercentile(50.0)) + " ns");
+    System.out.println("  p95:    " + formatNanos(histogram.getValueAtPercentile(95.0)) + " ns");
+    System.out.println("  p99:    " + formatNanos(histogram.getValueAtPercentile(99.0)) + " ns");
+    System.out.println("  p99.9:  " + formatNanos(histogram.getValueAtPercentile(99.9)) + " ns");
+    System.out.println("  p99.99: " + formatNanos(histogram.getValueAtPercentile(99.99)) + " ns");
+    System.out.println("  max:    " + formatNanos(histogram.getMaxValue()) + " ns");
   }
 
-  private String format(long value) {
+  /**
+   * Get the value at a given percentile.
+   *
+   * @param percentile the percentile (0-100)
+   * @return latency in nanoseconds
+   */
+  public long getPercentile(double percentile) {
+    return histogram.getValueAtPercentile(percentile);
+  }
+
+  /**
+   * Get the total number of recorded samples.
+   *
+   * @return sample count
+   */
+  public long getCount() {
+    return histogram.getTotalCount();
+  }
+
+  private String formatNanos(long value) {
     return String.format("%,d", value);
   }
 

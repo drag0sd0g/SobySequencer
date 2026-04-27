@@ -19,9 +19,9 @@ import com.soby.sequencer.model.Side;
 import com.soby.sequencer.util.AffinitySupport;
 import com.soby.sequencer.util.LatencyRecorder;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Core sequencer class that owns and manages the Disruptor instance. Wires together the handler
@@ -32,7 +32,6 @@ public class Sequencer {
   private final Disruptor<OrderEvent> disruptor;
   private final JournalHandler journalHandler;
   private final MatchingEngineHandler matchingEngineHandler;
-  private final ExecutorService executor;
   private final SequencerConfig config;
 
   // Latency recorders
@@ -59,15 +58,18 @@ public class Sequencer {
     this.matchingEngineHandler = new MatchingEngineHandler(matchingLatencyRecorder);
     var outputHandler = new OutputHandler();
 
-    // Create executor
-    this.executor = Executors.newCachedThreadPool();
-
-    // Create disruptor - Disruptor 3.4.4 constructor
+    // Create disruptor with named thread factory for observability
+    var threadCounter = new AtomicInteger();
     this.disruptor =
         new Disruptor<>(
             new OrderEventFactory(),
             config.getRingBufferSize(),
-            executor,
+            r -> {
+              Thread t = Executors.defaultThreadFactory().newThread(r);
+              t.setName("disruptor-handler-" + threadCounter.incrementAndGet());
+              t.setDaemon(true);
+              return t;
+            },
             ProducerType.SINGLE,
             getWaitStrategy(config.getWaitStrategy()));
 
@@ -129,16 +131,7 @@ public class Sequencer {
     try {
       disruptor.shutdown(5, TimeUnit.SECONDS);
     } catch (Exception e) {
-      // Ignore shutdown exceptions
-    }
-    executor.shutdown();
-    try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        executor.shutdownNow();
-      }
-    } catch (InterruptedException e) {
-      executor.shutdownNow();
-      Thread.currentThread().interrupt();
+      // Ignore shutdown timeout
     }
     try {
       journalHandler.close();

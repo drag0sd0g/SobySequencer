@@ -149,26 +149,11 @@ public class SequencerConfig {
     }
 
     public SequencerConfig build() {
-      // Ensure ring buffer size is a power of 2
-      int size = ringBufferSize;
-      if ((size & (size - 1)) != 0) {
-        // Round up to next power of 2
-        size = 1;
-        while (size < ringBufferSize) {
-          size <<= 1;
-        }
+      if ((ringBufferSize & (ringBufferSize - 1)) != 0) {
+        int size = Integer.highestOneBit(ringBufferSize) << 1;
+        this.ringBufferSize = size;
       }
-      var config = new SequencerConfig(this);
-      // Replace ring buffer size with correct power of 2
-      return new SequencerConfig(
-          new Builder()
-              .ringBufferSize(size)
-              .waitStrategy(config.waitStrategy)
-              .enableAffinity(config.enableAffinity)
-              .sequencerCpuCore(config.sequencerCpuCore)
-              .journalFilePath(config.journalFilePath)
-              .warmupPublishCount(config.warmupPublishCount)
-              .benchmarkPublishCount(config.benchmarkPublishCount));
+      return new SequencerConfig(this);
     }
 
     public Builder() {}

@@ -36,16 +36,11 @@ public class MatchingEngineHandler implements EventHandler<OrderEvent> {
 
   @Override
   public void onEvent(OrderEvent event, long sequenceNumber, boolean endOfBatch) {
-    // Record latency from journal completion to match completion
-    long journalCompletionTime = event.getTimestampNanos();
-    long matchStartTime = System.nanoTime();
-    long latency = matchStartTime - journalCompletionTime;
-    latencyRecorder.record(latency);
-
-    // Process the event
+    long start = System.nanoTime();
     processOrder(event);
     event.setState(EventState.PROCESSED);
     event.setSequenceNumber(sequenceNumber);
+    latencyRecorder.record(System.nanoTime() - start);
   }
 
   /**
